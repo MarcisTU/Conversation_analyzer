@@ -1,12 +1,9 @@
 # activate env
 source /home/marcis/.virtualenvs/KT_analyzer/bin/activate
+source ./.venv/bin/activate
 
 # local WSL2 dir
 cd /mnt/c/Users/User/PycharmProjects/KT_analyzer
-
-### uv env management
-# Add package to uv.lock so docker env sees it and installs
-uv add <pip package>
 
 
 ### Docker commands
@@ -17,7 +14,7 @@ docker compose down -v
 docker compose up --build api
 
 # Manage alembic db migrations (run this after SQLModel changes!)
-docker compose --profile tools run --rm alembic_gen uv run alembic revision --autogenerate -m "added optional llm_result_text column"
+docker compose --profile tools run --rm alembic_gen uv run alembic revision --autogenerate -m "initial migration"
 
 # Run utils scripts with docker command
 docker compose run --rm api uv run python -m src.utils.visualize_embeddings
@@ -54,3 +51,22 @@ SELECT generated_description FROM product_embeddings WHERE generated_description
 4) docker cp ./backups/pgdata/db_backup.bak postgres:/tmp/db_backup.bak
 5) docker compose exec -t postgres pg_restore -U  <your_db_user> -d <your_db_name> -v /tmp/db_backup.bak
 ###
+
+
+###
+WSL2 docker desktop deleted volume/image storage recovery
+--- Powershell
+wsl --shutdown
+diskpart
+->
+select vdisk file="C:\Users\User\AppData\Local\Docker\wsl\disk\docker_data.vhdx"
+attach vdisk readonly
+compact vdisk
+detach vdisk
+exit
+###
+
+
+###
+# Download huggingface repo model weights
+huggingface-cli download CSWRY/VOSR --include "torch_cache/*" --local-dir ./torch_cache
