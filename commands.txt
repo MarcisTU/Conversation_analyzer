@@ -1,0 +1,56 @@
+# activate env
+source /home/marcis/.virtualenvs/KT_analyzer/bin/activate
+
+# local WSL2 dir
+cd /mnt/c/Users/User/PycharmProjects/KT_analyzer
+
+### uv env management
+# Add package to uv.lock so docker env sees it and installs
+uv add <pip package>
+
+
+### Docker commands
+# Stop cotnainers and remove volumes
+docker compose down -v
+
+# Build service container fresh and start it
+docker compose up --build api
+
+# Manage alembic db migrations (run this after SQLModel changes!)
+docker compose --profile tools run --rm alembic_gen uv run alembic revision --autogenerate -m "added optional llm_result_text column"
+
+# Run utils scripts with docker command
+docker compose run --rm api uv run python -m src.utils.visualize_embeddings
+
+# Data ingestion script running inside docker compose env
+docker compose run --rm api uv run python -m src.services.data_ingest_service
+
+# LLM Service testing in docker
+docker compose run --rm api uv run python -m src.services.llm_service
+
+# rebuild service with no cache
+docker compose build --no-cache api
+
+# recreate docker service
+docker compose up -d --force-recreate broker_worker
+
+
+# For local windows development! With low storage after creating multiple images
+docker image prune
+
+
+### PSQL commands
+# Get llm generated text values that contain some token
+```
+SELECT generated_description FROM product_embeddings WHERE generated_description ILIKE '%guitar%' LIMIT 10;
+```
+
+
+###
+### PG volume data backup to host and then restore with docker
+1) docker compose exec -t postgres pg_dump -U <your_db_user> -d <your_db_name> -F c -b -v -f /tmp/db_backup.bak
+2) docker cp postgres:/tmp/db_backup.bak ./backups/pgdata/db_backup.bak
+3) docker compose up -d   (or make sure the container is restarted where you want to load the backup)
+4) docker cp ./backups/pgdata/db_backup.bak postgres:/tmp/db_backup.bak
+5) docker compose exec -t postgres pg_restore -U  <your_db_user> -d <your_db_name> -v /tmp/db_backup.bak
+###
