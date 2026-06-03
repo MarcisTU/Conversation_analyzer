@@ -4,143 +4,165 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multi-Lane Audio Diarization Sync Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        /* Global Box-Sizing Reset to prevent layout calculation drifts */
-        *, *::before, *::after {
-            box-sizing: border-box;
-        }
+        *, *::before, *::after { box-sizing: border-box; }
 
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --grid-line: rgba(51, 65, 85, 0.4);
-            /* Strict Shared Constraint to guarantee layout alignment */
-            --sidebar-width: 150px;
+            --bg-color: #080c14;
+            --card-bg: #0f1624;
+            --surface: #141d2e;
+            --surface-2: #1a2438;
+            --text-main: #e8edf5;
+            --text-muted: #5a6a82;
+            --text-dim: #3a4a62;
+            --border: #1e2d42;
+            --border-bright: #2a3d56;
+            --accent: #00d4ff;
+            --accent-glow: rgba(0, 212, 255, 0.15);
+            --red: #ef4444;
+            --sidebar-width: 160px;
+            --mono: 'IBM Plex Mono', monospace;
+            --sans: 'DM Sans', sans-serif;
         }
 
         body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--bg-color);
+            font-family: var(--sans);
+            background: var(--bg-color);
             color: var(--text-main);
             margin: 0;
-            padding: 2rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            padding: 2rem 1.5rem;
+            min-height: 100vh;
+            background-image:
+                radial-gradient(ellipse 60% 40% at 20% 10%, rgba(0,212,255,0.04) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 30% at 80% 80%, rgba(99,102,241,0.04) 0%, transparent 60%);
         }
 
         .container {
             width: 100%;
-            max-width: 1400px;
-            background-color: var(--card-bg);
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-            border: 1px solid var(--border-color);
+            max-width: 1440px;
+            margin: 0 auto;
         }
 
-        h2 {
-            margin-top: 0;
+        /* ── Header ── */
+        header {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1.25rem;
+        }
+
+        header h1 {
+            font-family: var(--mono);
+            font-size: 1.1rem;
             font-weight: 600;
-            color: var(--text-main);
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 0.75rem;
-        }
-
-        /* Control Panel Styles */
-        .controls {
-            margin-bottom: 1.5rem;
-            display: flex;
-            gap: 1.5rem;
-            align-items: center;
-            flex-wrap: wrap;
-            background: rgba(0,0,0,0.15);
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-        }
-
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-        }
-
-        .input-group label {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-weight: bold;
+            color: var(--accent);
+            margin: 0;
+            letter-spacing: 0.04em;
             text-transform: uppercase;
         }
 
-        .file-input-wrapper {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
+        header span {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
         }
 
+        /* ── Controls ── */
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+            background: var(--surface);
+            padding: 1rem 1.25rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+        }
+
+        .input-group label {
+            display: block;
+            font-family: var(--mono);
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }
+
+        .file-input-wrapper { position: relative; overflow: hidden; display: inline-block; }
         .file-input-wrapper input[type=file] {
             font-size: 100px;
             position: absolute;
-            left: 0;
-            top: 0;
+            left: 0; top: 0;
             opacity: 0;
             cursor: pointer;
         }
 
         .btn {
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            padding: 0.5rem 1.25rem;
+            background: var(--surface-2);
+            color: var(--text-main);
+            border: 1px solid var(--border-bright);
+            padding: 0.45rem 1.1rem;
             border-radius: 6px;
             cursor: pointer;
-            font-weight: 500;
-            display: inline-block;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            transition: all 0.15s;
         }
-        .btn:hover { background-color: #2563eb; }
+        .btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+        .btn.green { border-color: #10b981; color: #10b981; }
+        .btn.green:hover { background: rgba(16,185,129,0.12); }
 
         audio {
             flex-grow: 1;
             min-width: 250px;
-            height: 40px;
+            height: 36px;
+            filter: invert(1) hue-rotate(180deg) brightness(0.85);
         }
 
-        /* Legend Styles */
+        /* ── Legend ── */
         .legend {
-            display: flex;
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+            display: none;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
             flex-wrap: wrap;
-            background: rgba(0,0,0,0.2);
-            padding: 0.75rem 1rem;
+            padding: 0.65rem 1rem;
+            background: var(--surface);
             border-radius: 8px;
+            border: 1px solid var(--border);
         }
 
         .legend-item {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.9rem;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
         }
 
-        .color-box {
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
+        .color-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
         }
 
-        /* Multi-Lane Layout Structure */
+        /* ── Timeline Wrapper ── */
         .timeline-wrapper {
+            display: none;
             position: relative;
-            margin: 2.5rem 0;
-            background-color: #0b0f19;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            display: none; /* Hidden until data loads */
+            background: var(--surface);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-bottom: 1rem;
         }
 
         .lanes-container {
@@ -149,11 +171,11 @@
             position: relative;
         }
 
-        /* Single Speaker Track Row */
+        /* ── Lane Row ── */
         .lane-row {
             display: flex;
-            height: 60px;
-            border-bottom: 1px solid var(--grid-line);
+            height: 56px;
+            border-bottom: 1px solid var(--border);
             position: relative;
             align-items: center;
         }
@@ -163,174 +185,355 @@
             min-width: var(--sidebar-width);
             max-width: var(--sidebar-width);
             height: 100%;
-            background-color: rgba(30, 41, 59, 0.8);
-            border-right: 2px solid var(--border-color);
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-bright);
             display: flex;
             align-items: center;
-            padding-left: 1rem;
-            font-size: 0.85rem;
+            padding: 0 0.85rem;
+            font-family: var(--mono);
+            font-size: 0.72rem;
             font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.03em;
             z-index: 15;
-            color: var(--text-main);
+            gap: 0.5rem;
         }
 
-        /* Active timeline coordinate mapping space */
+        .speaker-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
         .lane-timeline-canvas {
             position: relative;
             flex-grow: 1;
             height: 100%;
         }
 
-        /* Absolute Positioned Data Blocks */
+        /* Subtle grid lines */
+        .lane-row:nth-child(even) .lane-timeline-canvas { background: rgba(255,255,255,0.008); }
+
+        /* ── Segments ── */
         .segment {
             position: absolute;
-            height: 70%;
-            top: 15%;
-            border-radius: 6px;
+            height: 65%;
+            top: 17.5%;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: filter 0.12s, transform 0.12s;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            transition: transform 0.15s ease, filter 0.15s ease;
-            cursor: pointer;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
+            justify-content: center;
+            gap: 1px;
         }
 
-        .segment:hover {
-            filter: brightness(1.2);
-            transform: scaleY(1.08);
-            z-index: 10;
+        .segment::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 50%);
+            border-radius: inherit;
+            pointer-events: none;
         }
 
-        .segment-label {
-            font-size: 0.7rem;
-            font-weight: bold;
-            color: #ffffff;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        .segment:hover { filter: brightness(1.25); transform: scaleY(1.1); z-index: 5; }
+        .segment.active { outline: 2px solid white; outline-offset: 1px; filter: brightness(1.3); }
+
+        .seg-type {
+            font-family: var(--mono);
+            font-size: 0.58rem;
+            font-weight: 600;
+            color: rgba(255,255,255,0.9);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+            pointer-events: none;
+        }
+
+        .seg-emotion-badge {
+            font-family: var(--mono);
+            font-size: 0.52rem;
+            color: rgba(255,255,255,0.75);
+            background: rgba(0,0,0,0.3);
+            border-radius: 2px;
+            padding: 0 3px;
+            pointer-events: none;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            padding: 0 4px;
-            width: 100%;
-            text-align: center;
+            max-width: 90%;
         }
 
-        .segment-time {
-            font-size: 0.6rem;
-            color: rgba(255,255,255,0.9);
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-        }
-
-        /* Time Axis Row Layout */
+        /* ── Time Axis ── */
         .time-axis {
-            position: relative;
-            height: 28px;
             display: flex;
-            background: rgba(0,0,0,0.2);
+            height: 26px;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-bright);
         }
 
         .axis-spacer {
             width: var(--sidebar-width);
             min-width: var(--sidebar-width);
-            max-width: var(--sidebar-width);
-            border-right: 2px solid transparent;
+            border-right: 1px solid var(--border-bright);
         }
 
         .axis-ticks-container {
             position: relative;
             flex-grow: 1;
-            height: 100%;
         }
 
         .time-tick {
             position: absolute;
             transform: translateX(-50%);
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            top: 6px;
+            font-family: var(--mono);
+            font-size: 0.62rem;
+            color: var(--text-dim);
+            top: 7px;
+            letter-spacing: 0.03em;
         }
 
         .time-tick::before {
             content: '';
             position: absolute;
-            top: -6px;
+            top: -7px;
             left: 50%;
             width: 1px;
             height: 4px;
-            background-color: var(--border-color);
+            background: var(--border-bright);
         }
 
-        /* Details Panel */
-        .details-panel {
-            background: rgba(15, 23, 42, 0.4);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
-            min-height: 50px;
-        }
-
-        /* Playhead Navigation Track Area Wrapper */
+        /* ── Playhead ── */
         .playhead-track-overlay {
             position: absolute;
             top: 0;
-            bottom: 28px; /* Terminates cleanly exactly above the x-axis tick section */
+            bottom: 26px;
             left: var(--sidebar-width);
             right: 0;
             pointer-events: none;
             z-index: 25;
         }
 
-        /* Visual Track Indicator Line */
         #play-head {
             position: absolute;
-            top: 0;
-            bottom: 0;
+            top: 0; bottom: 0;
             width: 2px;
-            background-color: #ef4444;
-            box-shadow: 0 0 8px #ef4444;
-            left: 0%; /* Initial baseline position */
+            background: var(--red);
+            box-shadow: 0 0 10px rgba(239,68,68,0.7), 0 0 20px rgba(239,68,68,0.3);
+            left: 0;
             pointer-events: none;
         }
+
+        #play-head::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -4px;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 7px solid var(--red);
+        }
+
+        /* ── Details Panel ── */
+        .details-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0;
+            margin-top: 0;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .details-empty {
+            padding: 1.25rem;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            letter-spacing: 0.03em;
+        }
+
+        .details-content {
+            display: none;
+        }
+
+        .details-content.visible {
+            display: block;
+        }
+
+        .details-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.85rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--card-bg);
+        }
+
+        .details-speaker-tag {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.2rem 0.65rem;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+            color: #fff;
+        }
+
+        .details-time-range {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .details-duration {
+            margin-left: auto;
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            color: var(--text-dim);
+        }
+
+        .details-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+        }
+
+        .details-section {
+            padding: 1rem 1.25rem;
+        }
+
+        .details-section + .details-section {
+            border-left: 1px solid var(--border);
+        }
+
+        .details-section-title {
+            font-family: var(--mono);
+            font-size: 0.62rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 0.65rem;
+        }
+
+        /* ── Transcript Text ── */
+        .transcript-text {
+            font-family: var(--sans);
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: var(--text-main);
+        }
+
+        .transcript-text.empty {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* ── Emotions ── */
+        .emotions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .emotion-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .emotion-name {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            width: 80px;
+            flex-shrink: 0;
+            text-transform: capitalize;
+        }
+
+        .emotion-bar-track {
+            flex-grow: 1;
+            height: 6px;
+            background: var(--card-bg);
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .emotion-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .emotion-pct {
+            font-family: var(--mono);
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            width: 36px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .no-emotions {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* emotion color mapping */
+        .emo-happy    { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+        .emo-neutral  { background: linear-gradient(90deg, #64748b, #475569); }
+        .emo-sad      { background: linear-gradient(90deg, #60a5fa, #3b82f6); }
+        .emo-angry    { background: linear-gradient(90deg, #f87171, #ef4444); }
+        .emo-fear     { background: linear-gradient(90deg, #a78bfa, #8b5cf6); }
+        .emo-disgust  { background: linear-gradient(90deg, #34d399, #10b981); }
+        .emo-surprise { background: linear-gradient(90deg, #f472b6, #ec4899); }
+        .emo-default  { background: linear-gradient(90deg, #00d4ff, #0ea5e9); }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Multi-Lane Audio Diarization Visualizer</h2>
+    <header>
+        <h1>Diarization Visualizer</h1>
+        <span>Multi-lane speaker timeline &amp; emotion analysis</span>
+    </header>
 
     <div class="controls">
         <div class="input-group">
-            <label>1. Analysis Data</label>
+            <label>01 / Analysis JSON</label>
             <div class="file-input-wrapper">
                 <button class="btn">Load JSON</button>
                 <input type="file" id="jsonPicker" accept=".json" />
             </div>
         </div>
-
         <div class="input-group">
-            <label>2. Source Recording</label>
+            <label>02 / Audio Source</label>
             <div class="file-input-wrapper">
-                <button class="btn" style="background-color: #10b981;">Load WAV</button>
-                <input type="file" id="audioPicker" accept="audio/wav, audio/*" />
+                <button class="btn green">Load Audio</button>
+                <input type="file" id="audioPicker" accept="audio/*" />
             </div>
         </div>
-
-        <div class="input-group" style="flex-grow: 1; padding-top: 1.1rem;">
-            <audio id="audioPlayer" controls style="display: none; width: 100%;"></audio>
+        <div class="input-group" style="flex-grow:1; padding-top:1.2rem;">
+            <audio id="audioPlayer" controls style="display:none; width:100%;"></audio>
         </div>
     </div>
 
-    <div class="legend" id="legendContainer" style="display: none;"></div>
+    <div class="legend" id="legendContainer"></div>
 
     <div class="timeline-wrapper" id="visualizerWrapper">
         <div class="playhead-track-overlay">
             <div id="play-head"></div>
         </div>
-
         <div class="lanes-container" id="lanesContainer"></div>
-
         <div class="time-axis">
             <div class="axis-spacer"></div>
             <div class="axis-ticks-container" id="axisTicksContainer"></div>
@@ -338,185 +541,235 @@
     </div>
 
     <div class="details-panel" id="detailsPanel">
-        <span style="color: var(--text-muted);">Please load both your structural JSON data and corresponding WAV file to start analyzing the track layers.</span>
+        <div class="details-empty" id="detailsEmpty">
+            Load a JSON file to begin. Click any segment to inspect its transcript and emotion data.
+        </div>
+        <div class="details-content" id="detailsContent">
+            <div class="details-header" id="detailsHeader"></div>
+            <div class="details-body">
+                <div class="details-section">
+                    <div class="details-section-title">Transcript</div>
+                    <div class="transcript-text" id="detailsText"></div>
+                </div>
+                <div class="details-section">
+                    <div class="details-section-title">Emotion Analysis</div>
+                    <div class="emotions-list" id="detailsEmotions"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
     let activeData = null;
-    const audioPlayer = document.getElementById('audioPlayer');
-    const playHead = document.getElementById('play-head');
+    let activeSegmentEl = null;
+
+    const audioPlayer  = document.getElementById('audioPlayer');
+    const playHead     = document.getElementById('play-head');
 
     const colorPalette = {
-        "0": "#475569",    // Noise/Silence (Muted Grey)
-        "-1": "#10b981",   // Speaker -1 (Emerald Green)
-        "-2": "#3b82f6",   // Speaker -2 (Blue)
-        "-3": "#f59e0b",   // Speaker -3 (Amber)
-        "-4": "#ec4899",   // Speaker -4 (Pink)
+        "0":   "#334155",
+        "-1":  "#06b6d4",
+        "-2":  "#6366f1",
+        "-3":  "#f59e0b",
+        "-4":  "#ec4899",
+        "-5":  "#14b8a6",
+        "-6":  "#f97316",
         "default": "#8b5cf6"
     };
 
-    function getSpeakerLabel(id) {
-        if (id === 0) return "Noise / Silence";
-        return `Speaker ${id}`;
-    }
+    const emotionColorClass = (label) => {
+        const map = { happy: 'emo-happy', neutral: 'emo-neutral', sad: 'emo-sad',
+                      angry: 'emo-angry', fear: 'emo-fear', disgust: 'emo-disgust', surprise: 'emo-surprise' };
+        return map[label?.toLowerCase()] || 'emo-default';
+    };
 
-    // 1. Handle JSON File Input
-    document.getElementById('jsonPicker').addEventListener('change', function(event) {
-        const file = event.target.files[0];
+    const getSpeakerLabel = (id) => id === 0 ? 'Noise / Silence' : `Speaker ${id}`;
+
+    // ── File Loaders ──────────────────────────────────────────────────
+    document.getElementById('jsonPicker').addEventListener('change', function(e) {
+        const file = e.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function(ev) {
             try {
-                const parsedJson = JSON.parse(e.target.result);
-                if (!parsedJson.segments || !Array.isArray(parsedJson.segments)) {
-                    throw new Error("Invalid structure: Missing root 'segments' array.");
-                }
-                activeData = parsedJson;
-                renderMultiLaneVisualizer(activeData);
-                checkSyncStatus();
-            } catch (err) {
-                alert(`Error parsing JSON: ${err.message}`);
-            }
+                const parsed = JSON.parse(ev.target.result);
+                if (!parsed.segments || !Array.isArray(parsed.segments)) throw new Error("Missing root 'segments' array.");
+                activeData = parsed;
+                renderVisualizer(activeData);
+            } catch (err) { alert(`JSON parse error: ${err.message}`); }
         };
         reader.readAsText(file);
     });
 
-    // 2. Handle WAV File Input
-    document.getElementById('audioPicker').addEventListener('change', function(event) {
-        const file = event.target.files[0];
+    document.getElementById('audioPicker').addEventListener('change', function(e) {
+        const file = e.target.files[0];
         if (!file) return;
-
-        const objectUrl = URL.createObjectURL(file);
-        audioPlayer.src = objectUrl;
+        audioPlayer.src = URL.createObjectURL(file);
         audioPlayer.style.display = 'block';
-
-        checkSyncStatus();
     });
 
-    function checkSyncStatus() {
-        if (activeData && audioPlayer.src) {
-            document.getElementById('detailsPanel').innerHTML = `
-                <span style="color: #10b981; font-weight: bold;">
-                    🚀 Sync Active! Tracks are isolated below. Play the audio console to track active timelines.
-                </span>`;
-        }
-    }
-
-    // 3. Absolute Visual Time Update Sync
+    // ── Playhead sync ─────────────────────────────────────────────────
     audioPlayer.addEventListener('timeupdate', function() {
         if (!activeData) return;
-
-        const totalDuration = activeData.segments[activeData.segments.length - 1].end_time;
-        const currentTime = audioPlayer.currentTime;
-
-        // Calculate raw percentage progress across the isolated overlay track space
-        const pctPosition = (currentTime / totalDuration) * 100;
-
-        if (pctPosition <= 100) {
-            playHead.style.left = `${pctPosition}%`;
-        }
+        const last = activeData.segments[activeData.segments.length - 1];
+        const pct = (audioPlayer.currentTime / last.end_time) * 100;
+        if (pct <= 100) playHead.style.left = `${pct}%`;
     });
 
-    function jumpToTime(seconds) {
-        if (audioPlayer.src) {
-            audioPlayer.currentTime = seconds;
-        }
-    }
+    function jumpToTime(s) { if (audioPlayer.src) audioPlayer.currentTime = s; }
 
-    function renderMultiLaneVisualizer(data) {
+    // ── Render ────────────────────────────────────────────────────────
+    function renderVisualizer(data) {
         const lanesContainer = document.getElementById('lanesContainer');
-        const legend = document.getElementById('legendContainer');
+        const legend         = document.getElementById('legendContainer');
         const ticksContainer = document.getElementById('axisTicksContainer');
-        const wrapper = document.getElementById('visualizerWrapper');
+        const wrapper        = document.getElementById('visualizerWrapper');
 
         lanesContainer.innerHTML = '';
-        legend.innerHTML = '';
+        legend.innerHTML         = '';
         ticksContainer.innerHTML = '';
-
-        wrapper.style.display = 'block';
-        legend.style.display = 'flex';
+        wrapper.style.display    = 'block';
+        legend.style.display     = 'flex';
 
         const totalDuration = data.segments[data.segments.length - 1].end_time;
-
-        const uniqueUserIds = [...new Set(data.segments.map(s => s.user_id))];
-        uniqueUserIds.sort((a, b) => b - a);
-
+        const uniqueIds = [...new Set(data.segments.map(s => s.user_id))].sort((a, b) => b - a);
         const laneCanvases = {};
 
-        uniqueUserIds.forEach(id => {
+        // Build lanes
+        uniqueIds.forEach(id => {
             const color = colorPalette[id] || colorPalette.default;
 
             legend.innerHTML += `
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: ${color}"></div>
+                    <div class="color-swatch" style="background:${color}"></div>
                     <span>${getSpeakerLabel(id)}</span>
-                </div>
-            `;
+                </div>`;
 
-            const rowEl = document.createElement('div');
-            rowEl.className = 'lane-row';
+            const row = document.createElement('div');
+            row.className = 'lane-row';
 
-            const labelSidebar = document.createElement('div');
-            labelSidebar.className = 'lane-label-sidebar';
-            labelSidebar.innerText = getSpeakerLabel(id);
+            const sidebar = document.createElement('div');
+            sidebar.className = 'lane-label-sidebar';
+            sidebar.innerHTML = `<span class="speaker-dot" style="background:${color}"></span>${getSpeakerLabel(id)}`;
 
-            const timelineCanvas = document.createElement('div');
-            timelineCanvas.className = 'lane-timeline-canvas';
+            const canvas = document.createElement('div');
+            canvas.className = 'lane-timeline-canvas';
 
-            rowEl.appendChild(labelSidebar);
-            rowEl.appendChild(timelineCanvas);
-            lanesContainer.appendChild(rowEl);
-
-            laneCanvases[id] = timelineCanvas;
+            row.appendChild(sidebar);
+            row.appendChild(canvas);
+            lanesContainer.appendChild(row);
+            laneCanvases[id] = canvas;
         });
 
-        // Plot segments using percentage layout values
-        data.segments.forEach((seg, index) => {
-            const duration = seg.end_time - seg.start_time;
+        // Plot segments
+        data.segments.forEach((seg, idx) => {
+            const dur     = seg.end_time - seg.start_time;
             const leftPct = (seg.start_time / totalDuration) * 100;
-            const widthPct = (duration / totalDuration) * 100;
-            const color = colorPalette[seg.user_id] || colorPalette.default;
+            const widPct  = (dur / totalDuration) * 100;
+            const color   = colorPalette[seg.user_id] || colorPalette.default;
+            const isNoise = seg.type === 'noise';
 
-            const segmentEl = document.createElement('div');
-            segmentEl.className = 'segment';
-            segmentEl.style.left = `${leftPct}%`;
-            segmentEl.style.width = `${widthPct}%`;
-            segmentEl.style.backgroundColor = color;
+            const topEmotion = seg.emotions && seg.emotions.length
+                ? seg.emotions.reduce((best, e) => e.confidence > best.confidence ? e : best)
+                : null;
 
-            segmentEl.innerHTML = `
-                <div class="segment-label">${seg.type === 'noise' ? '💤 Noise' : '🎙️ Active'}</div>
-                <div class="segment-time">${duration.toFixed(1)}s</div>
+            const el = document.createElement('div');
+            el.className = 'segment';
+            el.style.left            = `${leftPct}%`;
+            el.style.width           = `${widPct}%`;
+            el.style.backgroundColor = color;
+            el.style.opacity         = isNoise ? '0.35' : '1';
+
+            el.innerHTML = `
+                <span class="seg-type">${isNoise ? '— noise' : '▶ speech'}</span>
+                ${topEmotion ? `<span class="seg-emotion-badge">${topEmotion.label}</span>` : ''}
             `;
 
-            segmentEl.addEventListener('mouseenter', () => {
-                document.getElementById('detailsPanel').innerHTML = `
-                    <strong>Lane Assigned:</strong> ${getSpeakerLabel(seg.user_id)} |
-                    <strong>Segment Order Index:</strong> #${index + 1} |
-                    <strong>Timestamp Window:</strong> ${seg.start_time.toFixed(2)}s - ${seg.end_time.toFixed(2)}s
-                    (${duration.toFixed(2)}s duration)
-                `;
-            });
-
-            segmentEl.addEventListener('click', () => {
+            el.addEventListener('click', () => {
                 jumpToTime(seg.start_time);
+                showDetails(seg, idx, color, dur);
+
+                if (activeSegmentEl) activeSegmentEl.classList.remove('active');
+                el.classList.add('active');
+                activeSegmentEl = el;
             });
 
-            if (laneCanvases[seg.user_id]) {
-                laneCanvases[seg.user_id].appendChild(segmentEl);
-            }
+            if (laneCanvases[seg.user_id]) laneCanvases[seg.user_id].appendChild(el);
         });
 
-        // Render Scale Axis Ticks
-        const step = totalDuration > 120 ? 20 : (totalDuration > 60 ? 10 : 5);
-        for(let i = 0; i <= totalDuration; i += step) {
-            const pctPos = (i / totalDuration) * 100;
+        // Time ticks
+        const step = totalDuration > 120 ? 20 : totalDuration > 60 ? 10 : 5;
+        for (let i = 0; i <= totalDuration; i += step) {
             const tick = document.createElement('div');
             tick.className = 'time-tick';
-            tick.style.left = `${pctPos}%`;
+            tick.style.left = `${(i / totalDuration) * 100}%`;
             tick.innerText = `${i}s`;
             ticksContainer.appendChild(tick);
+        }
+
+        // Show empty details
+        showEmptyDetails();
+    }
+
+    // ── Detail Panel ──────────────────────────────────────────────────
+    function showEmptyDetails() {
+        document.getElementById('detailsEmpty').style.display   = 'block';
+        document.getElementById('detailsContent').classList.remove('visible');
+    }
+
+    function showDetails(seg, idx, color, dur) {
+        document.getElementById('detailsEmpty').style.display = 'none';
+        document.getElementById('detailsContent').classList.add('visible');
+
+        // Header
+        const header = document.getElementById('detailsHeader');
+        header.innerHTML = `
+            <span class="details-speaker-tag" style="background:${color}">${getSpeakerLabel(seg.user_id)}</span>
+            <span class="details-time-range">
+                ${seg.start_time.toFixed(2)}s → ${seg.end_time.toFixed(2)}s
+            </span>
+            <span style="
+                font-family: var(--mono);
+                font-size: 0.68rem;
+                padding: 0.15rem 0.55rem;
+                border-radius: 3px;
+                background: ${seg.type === 'noise' ? 'rgba(51,65,85,0.5)' : 'rgba(0,212,255,0.1)'};
+                color: ${seg.type === 'noise' ? 'var(--text-dim)' : 'var(--accent)'};
+                border: 1px solid ${seg.type === 'noise' ? 'var(--border)' : 'rgba(0,212,255,0.25)'};
+            ">${seg.type.toUpperCase()}</span>
+            <span class="details-duration">seg #${idx + 1} · ${dur.toFixed(2)}s</span>
+        `;
+
+        // Transcript
+        const textEl = document.getElementById('detailsText');
+        if (seg.text && seg.text.trim()) {
+            textEl.textContent = seg.text.trim();
+            textEl.className = 'transcript-text';
+        } else {
+            textEl.textContent = 'No transcript available for this segment.';
+            textEl.className = 'transcript-text empty';
+        }
+
+        // Emotions
+        const emotionsEl = document.getElementById('detailsEmotions');
+        if (seg.emotions && seg.emotions.length) {
+            emotionsEl.innerHTML = seg.emotions
+                .sort((a, b) => b.confidence - a.confidence)
+                .map(e => {
+                    const pct = (e.confidence * 100).toFixed(1);
+                    const cls = emotionColorClass(e.label);
+                    return `
+                        <div class="emotion-row">
+                            <span class="emotion-name">${e.label}</span>
+                            <div class="emotion-bar-track">
+                                <div class="emotion-bar-fill ${cls}" style="width:${pct}%"></div>
+                            </div>
+                            <span class="emotion-pct">${pct}%</span>
+                        </div>`;
+                }).join('');
+        } else {
+            emotionsEl.innerHTML = `<span class="no-emotions">No emotion data for this segment.</span>`;
         }
     }
 </script>

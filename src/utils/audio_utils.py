@@ -18,6 +18,10 @@ class AudioUtils:
         logger.info(f"Subtype/Bits:  {info.subtype} (e.g., PCM_16, FLOAT)")
 
     @staticmethod
+    def audio_slice(y, start: float, end: float, sr: int):
+        return y[int(start * sr):int(end * sr)]
+
+    @staticmethod
     def convert_stereo_to_mono(file_path, output_path=None):
         """
         Checks if a WAV file is mono. If it's stereo/multi-channel,

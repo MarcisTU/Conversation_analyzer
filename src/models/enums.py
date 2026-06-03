@@ -32,3 +32,28 @@ class LanguageCodes(str, Enum):
     lv = 'lv'
     ru = 'ru'
     not_set = 'not_set'
+
+
+class FeatureStatus(str, Enum):
+    WAITING = "waiting"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class FeatureName(str, Enum):
+    DIARIZATION = "diarization"
+    STT = "stt"
+    EMOTION = "emotion"
+
+
+class EmotionLabel(str, Enum):
+    neutral = 'neutral'
+    angry = 'angry'
+    disgusted = 'disgusted'
+    fearful = 'fearful'
+    happy = 'happy'
+    other = 'other'
+    surprised = 'surprised'
+    sad = 'sad'
+    unknown = 'unknown'

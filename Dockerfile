@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04
 
 # Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -58,6 +58,7 @@ RUN pip install --no-cache-dir fastapi[standard] huggingface_hub[hf_xet]
 RUN pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu130
 # Requirements install
 RUN pip install nvidia-resiliency-ext==0.3.0 nemo_toolkit['asr'] python-dotenv
+RUN pip install -U funasr
 
 # Copy the rest of the application code
 COPY . /app

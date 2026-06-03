@@ -19,13 +19,11 @@ from tqdm import tqdm
 from src.models.ai_speech import AiSADSegment
 
 from src.modules.constants import ROOT_DIR, SRC_DIR
-# from src.models.voiceid.voiceid_conversation_input import VoiceIdConversationInput
 from sklearn import preprocessing
 
 from src.models.enums import SegmentType
 from src.models.results import Results
 from src.models.results import ResultsSegment
-from src.utils.audio_utils import AudioUtils
 
 
 class DiarizationService:
@@ -314,7 +312,7 @@ class DiarizationService:
         file_path: str,
         file_path_denoised: str,
         num_speakers=None
-    ) -> Tuple[Results, str, bool]:
+    ) -> Tuple[Results, str]:
         """
         Asynchronous wrapper for the diarization pipeline.
         This offloads the heavy CUDA/CPU computation to a separate OS thread,
@@ -480,7 +478,6 @@ class DiarizationService:
                         segment_noise.type = SegmentType.noise
                         segment_noise.start_time = last_sec
                         segment_noise.end_time = segment_speech.start_time
-                        segment_noise.emotions = []
                         segments_speech_all.append(segment_noise)
                     last_sec = segment_speech.end_time
 
@@ -516,12 +513,6 @@ if __name__ == '__main__':
     args, _ = parser.parse_known_args()
 
     load_dotenv(f"{ROOT_DIR}/.env")
-
-    gpus = []
-    def get_gpu_usage():
-        r_mb = torch.cuda.memory_reserved(0) / 1_000 / 1_000
-        a_mb = torch.cuda.memory_allocated(0) / 1_000 / 1_000
-        return {'reserved': r_mb, 'used': {a_mb}}
 
     controller_diarization = DiarizationService(args)
     target_sample_rate = 16000

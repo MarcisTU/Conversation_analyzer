@@ -54,7 +54,7 @@ services:
       - ai_image_network
 
   api:
-    image: image_object_base:latest
+    image: kt_audio_base:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -66,24 +66,21 @@ services:
     working_dir: /app
     volumes:
       - .:/app
-      - api_venv:/app/.venv  # manage one uv env so we dont copy local one into docker
     ports:
       - "8083:8000"
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#      rabbitmq:
-#        condition: service_healthy
-#    command: >
-#      sh -c "uv run alembic upgrade head &&
-#             uv run uvicorn src.workers.api_worker:app --host 0.0.0.0 --workers 2 --port 8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     command: >
-      sh -c "uv run uvicorn src.workers.api_worker:app --host 0.0.0.0 --workers 2 --port 8000"
+      sh -c "uv run alembic upgrade head &&
+             uv run uvicorn src.workers.api_worker:app --host 0.0.0.0 --workers 2 --port 8000"
     networks:
       - ai_image_network
 
   alembic_gen:
-    image: image_object_base:latest # name the image so it doesn't rebuild every time
+    image: kt_audio_base:latest # name the image so it doesn't rebuild every time
     env_file: "./.env"
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
@@ -99,7 +96,7 @@ services:
       - tools
 
   broker_worker:
-    image: image_object_base:latest
+    image: kt_audio_base:latest
     env_file: "./.env"
     container_name: broker_worker
     working_dir: /app
@@ -115,13 +112,12 @@ services:
     volumes:
       - .:/app
       - ./logs:/logs
-      - api_venv:/app/.venv
     command: uv run python -m src.workers.broker_worker
     stop_grace_period: 30s
     restart: unless-stopped
 
   callback_worker:
-    image: image_object_base:latest
+    image: kt_audio_base:latest
     env_file: "./.env"
     container_name: callback_worker
     working_dir: /app
@@ -139,14 +135,13 @@ services:
     volumes:
       - .:/app
       - ./logs:/logs
-      - api_venv:/app/.venv
     command: uv run python -m src.workers.callback_worker
     stop_grace_period: 30s
     restart: unless-stopped
 
-  image_worker:
-    image: image_object_base:latest
-    container_name: image_worker
+  diarization_worker:
+    image: kt_audio_base:latest
+    container_name: diarization_worker
     working_dir: /app
     env_file: "./.env"
     environment:
@@ -161,7 +156,6 @@ services:
     volumes:
       - .:/app
       - ./logs:/logs
-      - api_venv:/app/.venv
     command: uv run python -m src.workers.image_worker
     stop_grace_period: 30s
     restart: unless-stopped
