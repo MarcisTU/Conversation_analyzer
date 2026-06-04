@@ -7,11 +7,11 @@ class SegmentType(str, Enum):
 
 
 class TaskStatus(str, Enum):
-    waiting = 'waiting'
-    processing = 'processing'
-    ready = 'ready'
-    failed = 'failed'
-    not_set = 'not_set'
+    WAITING = "WAITING"
+    PROCESSING = "PROCESSING"
+    READY = "READY"
+    FAILED = "FAILED"
+    NOT_SET = 'NOT_SET'
 
 
 class WorkerStatusMessage(str, Enum):
@@ -23,8 +23,9 @@ class WorkerStatusMessage(str, Enum):
 
 
 class WorkerType(str, Enum):
-    llm = 'llm'
-    # define more ai worker types here when needed
+    audio_diarization = 'audio_diarization'
+    audio_emotions = 'audio_emotions'
+    audio_stt = 'audio_stt'
 
 
 class LanguageCodes(str, Enum):
@@ -35,16 +36,16 @@ class LanguageCodes(str, Enum):
 
 
 class FeatureStatus(str, Enum):
-    WAITING = "waiting"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    WAITING = "WAITING"
+    PROCESSING = "PROCESSING"
+    READY = "READY"
+    FAILED = "FAILED"
 
 
 class FeatureName(str, Enum):
-    DIARIZATION = "diarization"
-    STT = "stt"
-    EMOTION = "emotion"
+    diarization = "diarization"
+    stt = "stt"
+    emotion = "emotion"
 
 
 class EmotionLabel(str, Enum):
@@ -57,3 +58,8 @@ class EmotionLabel(str, Enum):
     surprised = 'surprised'
     sad = 'sad'
     unknown = 'unknown'
+
+
+class FileBucketNames(str, Enum):
+    request_files_unprocessed = 'request_files_unprocessed'
+    request_files_processed = 'request_files_processed'

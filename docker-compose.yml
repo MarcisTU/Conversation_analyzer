@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16
     container_name: postgres
     env_file: "./.env"
     volumes:
@@ -14,7 +14,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - ai_image_network
+      - ai_audio_network
     restart: unless-stopped
 
   rabbitmq:
@@ -35,7 +35,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - ai_image_network
+      - ai_audio_network
     restart: unless-stopped
 
   file_storage:
@@ -51,7 +51,7 @@ services:
       - ./data:/data
     command: server /data --console-address ":9001"
     networks:
-      - ai_image_network
+      - ai_audio_network
 
   api:
     image: kt_audio_base:latest
@@ -73,11 +73,13 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      file_storage:
+        condition: service_started
     command: >
-      sh -c "uv run alembic upgrade head &&
-             uv run uvicorn src.workers.api_worker:app --host 0.0.0.0 --workers 2 --port 8000"
+      sh -c "alembic upgrade head &&
+             uvicorn src.workers.api_worker:app --host 0.0.0.0 --workers 2 --port 8000"
     networks:
-      - ai_image_network
+      - ai_audio_network
 
   alembic_gen:
     image: kt_audio_base:latest # name the image so it doesn't rebuild every time
@@ -91,7 +93,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - ai_image_network
+      - ai_audio_network
     profiles:
       - tools
 
@@ -108,7 +110,7 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - ai_image_network
+      - ai_audio_network
     volumes:
       - .:/app
       - ./logs:/logs
@@ -131,7 +133,7 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - ai_image_network
+      - ai_audio_network
     volumes:
       - .:/app
       - ./logs:/logs
@@ -152,7 +154,7 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - ai_image_network
+      - ai_audio_network
     volumes:
       - .:/app
       - ./logs:/logs
@@ -166,5 +168,5 @@ volumes:
   api_venv:
 
 networks:
-  ai_image_network:
+  ai_audio_network:
     driver: bridge

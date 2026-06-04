@@ -4,16 +4,16 @@ import json
 import os
 import signal
 import uuid
-from datetime import datetime, timezone
 
 from aio_pika import IncomingMessage, ExchangeType, DeliveryMode, Message
 from loguru import logger
 
-from src.models.enums import WorkerStatusMessage
+from src.models.enums import WorkerStatusMessage, FeatureName
+from src.models.requests import WorkerResponsePayload
 from src.modules.mq_connection_manager import RabbitMQManager
 from src.services.diarization_service import DiarizationService
 
-WORKER_TYPE = "audio_diarization"
+
 WORKER_ID = f"worker-{uuid.uuid4().hex[:8]}"
 
 logger.add(f"./logs/worker_{WORKER_ID}.log", rotation="00:00", retention="7 days")
@@ -25,7 +25,7 @@ class AudioDiarizationWorker:
 
         self.queue = None
         self.exchange = None
-        self.routing_key = f"worker.{WORKER_TYPE}"
+        self.routing_key = f"worker.{FeatureName.diarization}"
 
         self.audio_diarization_service = audio_diarization_service
 
@@ -45,31 +45,22 @@ class AudioDiarizationWorker:
 
         logger.info(f"Worker {WORKER_ID} connected and bound to {self.routing_key}")
 
-    async def send_status(self, status: str, extra_data: dict = None):
-        payload = {
-            "worker_type": WORKER_TYPE,
-            "worker_id": WORKER_ID,
-            "status": status,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        if extra_data:
-            payload.update(extra_data)
-
+    async def send_status(self, worker_response: WorkerResponsePayload):
         try:
             await self.mq_manager.channel.default_exchange.publish(
                 Message(
-                    body=json.dumps(payload).encode(),
+                    body=worker_response.model_dump_json().encode(),
                     delivery_mode=DeliveryMode.PERSISTENT,
                 ),
                 routing_key=os.environ["RESPONSE_QUEUE"],
             )
         except Exception as e:
-            logger.error(f"Failed to send status {status}: {e}")
+            logger.error(f"Failed to send status {worker_response.status}: {e}")
 
     async def heartbeat_loop(self):
         try:
             while True:
-                await self.send_status(WorkerStatusMessage.heartbeat.value)
+                await self.send_status(WorkerResponsePayload(status=WorkerStatusMessage.heartbeat))
                 await asyncio.sleep(30)
         except asyncio.CancelledError:
             logger.info("Heartbeat loop stopped.")
@@ -78,28 +69,29 @@ class AudioDiarizationWorker:
         async with message.process():
             try:
                 payload = json.loads(message.body.decode())
-                request_id = payload["request_id"]
+                task_uuid = payload["task_uuid"]
 
-                logger.info(f"Processing task {request_id}...")
+                logger.info(f"Processing task {task_uuid}...")
 
-                result_text = await self.audio_diarization_service.inference(user_query=payload['user_query'])
-                logger.info(f"Finished task {request_id}. \nResult: {result_text}")
+                result = await self.audio_diarization_service.inference(file_path="")   # TODO fetch file path from minio and pass temporary file handle
+                logger.info(f"Finished task {task_uuid}. \nResult: {result}")
 
-                result_data = {
-                    "request_id": request_id,
-                    "result": result_text,
-                    "callback_url": payload["callback_url"],
-                    "metadata": payload["metadata"],
-                    "status": WorkerStatusMessage.success.value
-                }
+                worker_response_data = WorkerResponsePayload(
+                    task_uuid=task_uuid,
+                    status=WorkerStatusMessage.success,
+                    worker_id=WORKER_ID,
+                    worker_type=FeatureName.diarization,
+                    result=result,
+                    callback_url=payload["callback_url"]
+                )
 
                 # Send result back (this also acts as a registration for the next task)
-                await self.send_status(WorkerStatusMessage.success.value, result_data)
-                logger.info(f"Task {request_id} completed and result sent.")
+                await self.send_status(worker_response_data)
+                logger.info(f"Task {task_uuid} completed and result sent.")
 
             except Exception as e:
                 logger.exception(f"Error processing task: {e}")
-                await self.send_status(WorkerStatusMessage.failed_task.value, result_data)
+                await self.send_status(WorkerResponsePayload(status=WorkerStatusMessage.failed_task))
 
     async def run(self):
         heartbeat_task = asyncio.create_task(self.heartbeat_loop())
@@ -112,7 +104,7 @@ class AudioDiarizationWorker:
         except (asyncio.CancelledError, KeyboardInterrupt):
             logger.info("Worker shutting down...")
         finally:
-            await self.send_status(WorkerStatusMessage.shutdown.value)
+            await self.send_status(WorkerResponsePayload(status=WorkerStatusMessage.shutdown))
 
             heartbeat_task.cancel()
 

@@ -13,17 +13,19 @@ docker compose down -v
 # Build service container fresh and start it
 docker compose up --build api
 
+# Ran only once on first launch
+docker compose run --rm alembic_gen alembic init migrations
 # Manage alembic db migrations (run this after SQLModel changes!)
-docker compose --profile tools run --rm alembic_gen uv run alembic revision --autogenerate -m "initial migration"
+docker compose --profile tools run --rm alembic_gen alembic revision --autogenerate -m "initial migration features"
 
 # Run utils scripts with docker command
-docker compose run --rm api uv run python -m src.utils.visualize_embeddings
+docker compose run --rm api python -m src.utils.visualize_embeddings
 
 # Data ingestion script running inside docker compose env
-docker compose run --rm api uv run python -m src.services.data_ingest_service
+docker compose run --rm api python -m src.services.data_ingest_service
 
 # LLM Service testing in docker
-docker compose run --rm api uv run python -m src.services.llm_service
+docker compose run --rm api python -m src.services.llm_service
 
 # rebuild service with no cache
 docker compose build --no-cache api

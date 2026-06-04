@@ -15,6 +15,9 @@ class Feature(SQLModel, table=True):
     name: FeatureName = Field(unique=True, index=True)
     order_idx: int = Field(index=True)
 
+    def __repr__(self):
+        return f"<Feature {self.id}>"
+
 
 class FeaturesInTask(SQLModel, table=True):
     __tablename__ = "features_in_task"
@@ -23,7 +26,7 @@ class FeaturesInTask(SQLModel, table=True):
     task_id: int = Field(foreign_key="tasks.id", ondelete="CASCADE")
     feature_id: int = Field(foreign_key="features.id", ondelete="RESTRICT")
     status: FeatureStatus = Field(default=FeatureStatus.WAITING)
-    result_data: Optional[Results] = Field(default=None, sa_column=Column(pg.JSONB))
+    result_data: Results | None = Field(default=None, sa_column=Column(pg.JSONB))
 
     # Add relationship to not have to do 2 separate queries to get feature name
     feature: Feature = Relationship(sa_relationship_kwargs={"lazy": "joined"})
@@ -32,6 +35,9 @@ class FeaturesInTask(SQLModel, table=True):
     model_config = {
         "arbitrary_types_allowed": True
     }
+
+    def __repr__(self):
+        return f"<FeaturesInTask {self.id}>"
 
 
 class Task(SQLModel, table=True):

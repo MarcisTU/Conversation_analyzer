@@ -4,7 +4,7 @@ from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 
-from src.db.models import Product, Review
+from src.db.models import Task, FeaturesInTask, Feature
 
 
 # Create async engine

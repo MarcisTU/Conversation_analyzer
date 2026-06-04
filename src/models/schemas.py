@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 import numpy as np
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.models.enums import TaskStatus
+from src.models.enums import TaskStatus, FeatureStatus, FeatureName
+from src.models.results import Results
 
 
 class ProductRead(BaseModel):
@@ -82,10 +83,8 @@ class TaskRead(BaseModel):
 
     id: int
     task_uuid: str
-    status: TaskStatus = TaskStatus.not_set
-    llm_result_text: Optional[str] = None
+    status: TaskStatus = TaskStatus.NOT_SET
     callback_url: Optional[str] = None
-    user_query: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -95,9 +94,22 @@ class TaskUpdate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     status: Optional[TaskStatus] = None
-    llm_result_text: Optional[str] = None
+    results: Optional[Results] = None
 
 
 class WorkerStatus(BaseModel):
     worker_id: str
     last_heartbeat: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class FeatureInTaskRead(BaseModel):
+    id: int
+    task_id: int
+    feature_id: int
+    status: FeatureStatus
+    result_data: Optional[Results] = None
+    name: FeatureName
+    order_idx: int
+
+    class Config:
+        from_attributes = True

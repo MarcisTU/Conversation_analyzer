@@ -1,4 +1,3 @@
-import json
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -7,28 +6,59 @@ from uuid import UUID
 
 import aio_pika
 from aio_pika import DeliveryMode, Message
-from fastapi import FastAPI, HTTPException, Depends, status, Query
+from fastapi import FastAPI, HTTPException, Depends, status, Query, UploadFile
+from fastapi.security import APIKeyHeader
 from loguru import logger
+from miniopy_async import Minio
 
 from src.db.service import TaskService
-from src.models.enums import TaskStatus, WorkerType
-from src.models.requests import TaskSubmitRequest
+from src.models.enums import TaskStatus, FileBucketNames, FeatureName
+from src.models.requests import TaskPayload
 from src.models.response import TaskSubmitResponse, TaskStatusResponse
+from src.models.results import Results
 from src.models.schemas import TaskRead
 from src.modules.exception_handlers import register_exception_handlers
+from src.modules.file_storage_client import MinioManager
 from src.modules.mq_connection_manager import RabbitMQManager
 
 
 rmq_manager = RabbitMQManager(os.environ["RABBITMQ_URL"])
+minio_manager = MinioManager("localhost:9000", "admin", "admin123", secure=False)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await rmq_manager.connect()
+    minio_manager.init_client()
     yield
     await rmq_manager.close()
+    await minio_manager.close_client()
 
 
-app = FastAPI(lifespan=lifespan)
+api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=True)
+
+
+async def verify_api_key(api_key: str = Depends(api_key_header)):
+    expected_api_key = os.getenv("API_KEY")
+
+    if not expected_api_key:
+        logger.error("API_KEY environment variable is not configured.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API authentication is misconfigured on the server."
+        )
+
+    if api_key != expected_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or missing API Key."
+        )
+
+    return api_key
+
+
+# Protect all routes. If need some to be public can create separately Dependency for each
+app = FastAPI(lifespan=lifespan, dependencies=[Depends(verify_api_key)])
 register_exception_handlers(app)
 
 
@@ -38,40 +68,64 @@ async def root():
 
 
 @app.post(
+    path="/api/v1/task_submit_url",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=TaskSubmitResponse
+)
+async def create_audio_url_task(
+    youtube_url: str | None = Query(None, description="Youtube url for video audio you want to process."),
+    callback_url: str | None = Query(None, description="Callback url for receiving task completion results"),
+    file_client: Minio = Depends(minio_manager.get_client),
+    channel: aio_pika.RobustChannel = Depends(rmq_manager.get_channel)
+):
+    pass
+
+@app.post(
     path="/api/v1/task_submit",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=TaskSubmitResponse
 )
-async def create_product_search_task(
-    payload: TaskSubmitRequest,
+async def create_audio_task(
+    file: UploadFile,
+    callback_url: str | None = Query(None, description="Callback url for receiving task completion results"),
+    file_client: Minio = Depends(minio_manager.get_client),
     channel: aio_pika.RobustChannel = Depends(rmq_manager.get_channel)
 ):
     task_uuid = str(uuid.uuid4())
+    object_name = f"{task_uuid}_{file.filename}"
 
-    # TODO Create pydantic model for payload
-    task_payload = {
-        "request_id": task_uuid,
-        "worker_type": WorkerType.llm.value,
-        "user_query": payload.user_query,
-        "callback_url": payload.callback_url,
-        "metadata": {"generated_by": "fastapi_v1_products"}
-    }
+    if not await file_client.bucket_exists(FileBucketNames.request_files_unprocessed):
+        await file_client.make_bucket(FileBucketNames.request_files_unprocessed)
+
+    await file_client.put_object(
+        bucket_name=FileBucketNames.request_files_unprocessed,
+        object_name=object_name,
+        data=file.file,
+        length=file.size
+    )
+
+    await TaskService.insert_task_with_features(
+        callback_url=callback_url,
+        task_uuid=task_uuid,
+        features_to_process=[FeatureName.diarization, FeatureName.emotion]
+    )
+
+    task_payload = TaskPayload(
+        task_uuid=task_uuid,
+        file_name=object_name,
+        bucket_name=FileBucketNames.request_files_unprocessed,
+        callback_url=callback_url
+    )
 
     try:
         await channel.default_exchange.publish(
             Message(
-                body=json.dumps(task_payload).encode(),
+                body=task_payload.model_dump_json().encode(),
                 delivery_mode=DeliveryMode.PERSISTENT,
             ),
             routing_key=os.environ["REQUEST_QUEUE"],
         )
-        logger.info(f"Successfully published task {task_uuid} to {os.environ["REQUEST_QUEUE"]}")
-
-        await TaskService.insert_task(
-            user_query=payload.user_query,
-            callback_url=payload.callback_url,
-            task_uuid=task_uuid
-        )
+        logger.info(f"Successfully published task {task_uuid} to {os.environ['REQUEST_QUEUE']}")
 
     except Exception as e:
         logger.error(f"Database insertion failed: {e}")
@@ -81,7 +135,7 @@ async def create_product_search_task(
         )
 
     return TaskSubmitResponse(
-        status=TaskStatus.waiting,
+        status=TaskStatus.WAITING,
         task_uuid=task_uuid,
         message="Task has been queued for processing."
     )
@@ -100,6 +154,8 @@ async def task_status(
     task_uuid_value = str(task_uuid)
     task_data: TaskRead = await TaskService.get_task(task_uuid_value)
 
+    # TODO get task result from FeaturesInTask table
+
     if task_data is not None:
         logger.info(f"Successfully fetched task {task_uuid_value}")
     else:
@@ -111,6 +167,6 @@ async def task_status(
     return TaskStatusResponse(
         status=task_data.status,
         task_uuid=task_uuid_value,
-        result_text=task_data.llm_result_text
+        result=Results()
     )
 

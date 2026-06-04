@@ -40,6 +40,10 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
 # Put conda on environmental path
 ENV PATH=$CONDA_DIR/bin:$PATH
 
+# Configure conda to use conda-forge and strictly avoid the default commercial channels
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
 # Create the Conda environment with Python 3.10 named 'env_marcis_v1'
 RUN conda create -n env_marcis_v1 python=3.10 -y
 
@@ -51,7 +55,7 @@ ENV CONDA_DEFAULT_ENV=env_marcis_v1
 
 ### API Dependencies
 RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir fastapi[standard] huggingface_hub[hf_xet]
+RUN pip install --no-cache-dir fastapi[standard] huggingface_hub[hf_xet] alembic
 
 ### AI Dependencies
 # install specific PyTorch wheels inside the conda environment
@@ -59,6 +63,7 @@ RUN pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url h
 # Requirements install
 RUN pip install nvidia-resiliency-ext==0.3.0 nemo_toolkit['asr'] python-dotenv
 RUN pip install -U funasr
+RUN pip install sqlmodel asyncpg aio-pika loguru miniopy-async
 
 # Copy the rest of the application code
 COPY . /app

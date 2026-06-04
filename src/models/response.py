@@ -5,12 +5,12 @@ from src.models.results import Results
 
 
 class TaskSubmitResponse(BaseModel):
-    status: TaskStatus = Field(default=TaskStatus.waiting)
+    status: TaskStatus = Field(default=TaskStatus.WAITING)
     task_uuid: str
     message: str
 
 
 class TaskStatusResponse(BaseModel):
-    status: TaskStatus = Field(default=TaskStatus.waiting)
+    status: TaskStatus = Field(default=TaskStatus.WAITING)
     task_uuid: str
-    results: Results = Field(default_factory=Results)
+    result: Results = Field(default_factory=Results)
