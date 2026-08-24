@@ -12,7 +12,8 @@ import torch
 import numpy as np
 from dotenv import load_dotenv
 from loguru import logger
-from nemo.collections.asr.models.msdd_models import NeuralDiarizer
+from nemo.collections.asr.models import SortformerEncLabelModel
+from nemo.collections.asr.parts.mixins.diarization import DiarizeConfig
 import nemo.collections.asr as nemo_asr
 from tqdm import tqdm
 
@@ -24,29 +25,26 @@ from sklearn import preprocessing
 from src.models.enums import SegmentType
 from src.models.results import Results
 from src.models.results import ResultsSegment
+from src.services.base_service import BaseService
 
 
-class DiarizationService:
-    def __init__(self, args, batch_size_voiceid=4):
+class DiarizationService(BaseService):
+    def __init__(self, args, batch_size=1):
         try:
             super().__init__()
             self.args = args
-            self.batch_size_voiceid = batch_size_voiceid
+            self.batch_size = batch_size
 
-            ### Nvidia doesn't integrate in memory np arrays for inference so currently create tmp dir for this worker
-            if not os.path.exists(f"{SRC_DIR}/data/diarization_temp"):
-                os.makedirs(f"{SRC_DIR}/data/diarization_temp")
-            self.temporary_result_path = f"{SRC_DIR}/data/diarization_temp"
+            self.micro_pause_segment_merge_threshold = 1.0
+            self.jre_podcast_intro_offset = 12.0   # for analyzing Joe Rogan Experience podcasts
 
-            self.batch_size_msdd = 4
-            self.num_workers_msdd = 1
-            self.micro_pause_segment_merge_threshold = 0.3
+            self.speaker_diarizer = SortformerEncLabelModel.from_pretrained("nvidia/diar_streaming_sortformer_4spk-v2.1")
+            self.speaker_diarizer.eval()
+            self.speaker_diarizer.sortformer_modules.chunk_len = 340
+            self.speaker_diarizer.sortformer_modules.chunk_right_context = 40
+            self.speaker_diarizer.sortformer_modules.fifo_len = 40
+            self.speaker_diarizer.sortformer_modules.spkcache_update_period = 300
 
-            ### This model accepts 16000 KHz Mono-channel Audio (wav files) as input.
-            ### To finetune:: https://docs.nvidia.com/nemo-framework/user-guide/24.07/nemotoolkit/asr/speaker_diarization/datasets.html
-            ### https://github.com/NVIDIA-NeMo/NeMo/blob/stable/tutorials/speaker_tasks/Speaker_Diarization_Training.ipynb
-            self.speech_diarizer = NeuralDiarizer.from_pretrained("diar_msdd_telephonic").to(self.args.device)
-            logger.debug(self.speech_diarizer._cfg)
             logger.info(f"Using device: {self.args.device}")
 
             try:
@@ -56,174 +54,6 @@ class DiarizationService:
 
         except Exception as exc:
             logger.exception(exc)
-
-    def diarize_audio(self, input_audio_path, num_speakers=None):
-        if num_speakers == 0:
-            num_speakers = None
-
-        file_base_name = os.path.basename(input_audio_path).replace('.wav', '')
-        output_dir = f'{self.temporary_result_path}/outputs_msdd_{file_base_name}'
-
-        if os.path.exists(output_dir):
-            logger.warning(f"Output directory already exists: {output_dir}. Removing it.")
-            shutil.rmtree(output_dir)
-
-        logger.info(f"Running diarization on: {input_audio_path}")
-        os.makedirs(output_dir, exist_ok=True)
-
-        ### !!!!! TODO do not change these, doesnt work without manual settings
-        self.speech_diarizer.clustering_embedding.cfg_diar_infer.diarizer.out_dir = output_dir
-        self.speech_diarizer.clustering_embedding.clus_diar_model._diarizer_params.out_dir = output_dir
-        manifest_path = f'{output_dir}/manifest.json'
-        self.speech_diarizer.clustering_embedding.clus_diar_model._diarizer_params.manifest_filepath = manifest_path
-        self.speech_diarizer.clustering_embedding._cfg_msdd.test_ds.emb_dir = f"{output_dir}/speaker_outputs/embeddings"
-
-        meta = [
-            {
-                'audio_filepath': input_audio_path,
-                'offset': 0,
-                'duration': None,
-                'label': 'infer',
-                'text': '-',
-                'num_speakers': num_speakers,
-                'rttm_filepath': None,
-                'uem_filepath': None,
-            }
-        ]
-
-        with open(manifest_path, 'w') as f:
-            f.write('\n'.join(json.dumps(x) for x in meta))
-
-        self.speech_diarizer._initialize_configs(
-            manifest_path=manifest_path,
-            max_speakers=None,
-            num_speakers=num_speakers,
-            tmpdir=output_dir,
-            batch_size=self.batch_size_msdd,
-            num_workers=self.num_workers_msdd,
-            verbose=False,
-        )
-
-        if num_speakers:
-            self.speech_diarizer._cfg.diarizer.clustering.parameters.oracle_num_speakers = True
-            self.speech_diarizer._cfg.diarizer.clustering.parameters.num_speakers = num_speakers
-        else:
-            self.speech_diarizer._cfg.diarizer.clustering.parameters.oracle_num_speakers = False
-
-        self.speech_diarizer.msdd_model.cfg.test_ds.manifest_filepath = manifest_path
-
-        start = time.time()
-        try:
-            self.speech_diarizer.diarize()
-        except Exception as e:
-            logger.error(f"Error during diarization: {e}")
-
-        end = time.time()
-        logger.info(f"Diarization complete! Results saved to {output_dir}/pred_rttms")
-        logger.info(f"Time taken: {end - start:.2f} seconds\n")
-
-    def get_voiceid_file_embeddings(self, input_audio_path) -> Tuple[np.array, float]:
-        voice_id_emb = np.array([])
-        quality = 0.0
-
-        self.diarize_audio(input_audio_path, num_speakers=1)
-
-        file_base_name = os.path.basename(input_audio_path).replace('.wav', '')
-        output_dir = f'{self.temporary_result_path}/outputs_msdd_{file_base_name}'
-        rttm_path = f'{output_dir}/pred_rttms/{file_base_name}.rttm'
-
-        if not os.path.exists(rttm_path):
-            logger.error(f"RTTM file not found: {rttm_path}")
-        else:
-            with open(rttm_path, 'r') as f:
-                rttm_lines = f.readlines()
-
-            rttm_lines = [line for line in rttm_lines if line.startswith('SPEAKER')]
-            rttm_lines = [line.strip() for line in rttm_lines]
-
-            result = []
-            for line in rttm_lines:
-                parts = line.split()
-                start_time = float(parts[3])
-                duration = float(parts[4])
-                speaker_id = int(parts[7].split('_')[1])
-
-                segment = AiSADSegment(
-                    start_sec=start_time,
-                    end_sec=start_time + duration,
-                    speaker_id=speaker_id
-                )
-                result.append(segment)
-
-            y, sr = librosa.load(input_audio_path, sr=self.args.datasource_samplerate)
-
-            quality = 0.0
-            total_length = librosa.get_duration(filename=input_audio_path)
-            total_speech_length = 0.0
-            for sad_region in result:
-                total_speech_length += sad_region.end_sec - sad_region.start_sec
-
-            if total_length > 0 and total_speech_length > 0:
-                quality = total_length / total_speech_length
-
-            quality = min(quality, 1.0)
-
-            speaker_segments = []
-            for idx_reg, sad_region in enumerate(result):
-                wav_segment = y[int(sad_region.start_sec * self.args.datasource_samplerate):int(sad_region.end_sec * self.args.datasource_samplerate)]
-                speaker_segments.append(wav_segment)
-
-            speaker_audio_segment_whole = np.concatenate(speaker_segments)
-            input_embedding, _ = self.speaker_model.infer_segment(
-                segment=speaker_audio_segment_whole
-            )
-            if len(input_embedding.shape) == 1:
-                input_embedding = input_embedding.unsqueeze(0)
-
-            input_embedding = input_embedding.cpu().numpy()
-
-            # np_center = np.median(input_embedding.cpu().numpy(), axis=0)
-            voice_id_emb = self.normalize_embedding(input_embedding)
-
-        return voice_id_emb, quality
-
-    def load_diarize_results(self, input_audio_path) -> List[AiSADSegment]:
-        file_base_name = os.path.basename(input_audio_path).replace('.wav', '')
-        output_dir = f'{self.temporary_result_path}/outputs_msdd_{file_base_name}'
-        rttm_path = f'{output_dir}/pred_rttms/{file_base_name}.rttm'
-        if not os.path.exists(rttm_path):
-            logger.error(f"RTTM file not found: {rttm_path}")
-            return []
-
-        with open(rttm_path, 'r') as f:
-            rttm_lines = f.readlines()
-
-        rttm_lines = [line for line in rttm_lines if line.startswith('SPEAKER')]
-        rttm_lines = [line.strip() for line in rttm_lines]
-
-        result = []
-        for line in rttm_lines:
-            parts = line.split()
-            start_time = float(parts[3])
-            duration = float(parts[4])
-            speaker_id = int(parts[7].split('_')[1])
-
-            segment = AiSADSegment(
-                start_sec=start_time,
-                end_sec=start_time + duration,
-                speaker_id=speaker_id
-            )
-            result.append(segment)
-
-        return result
-
-    def clean_up_diarize_results(self, input_audio_path):
-        file_base_name = os.path.basename(input_audio_path).replace('.wav', '')
-        output_dir = f'{self.temporary_result_path}/outputs_msdd_{file_base_name}'
-
-        # check if dir exists
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
 
     def normalize_embedding(self, np_embedding: np.ndarray) -> np.ndarray:
         np_result = np.array(np_embedding)
@@ -310,7 +140,6 @@ class DiarizationService:
     async def inference(
         self,
         file_path: str,
-        file_path_denoised: str,
         num_speakers=None
     ) -> Tuple[Results, str]:
         """
@@ -323,39 +152,57 @@ class DiarizationService:
         return await asyncio.to_thread(
             self._run_inference,
             file_path=file_path,
-            file_path_denoised=file_path_denoised,
             num_speakers=num_speakers
         )
 
     def _run_inference(
         self,
-        file_path: str,
-        file_path_denoised: str,  # TODO in worker save the files from MinIO buckets to temp request file dir
+        file_path: str,  # TODO in worker save the files from MinIO buckets to temp request file dir
         num_speakers = None
     ) -> Tuple[Results, str]:
         result = None
         error_message = None
         try:
-            target_sample_rate = self.args.datasource_samplerate
-
-            if file_path != file_path_denoised:
-                file_path = file_path_denoised  # use enhanced/denoised file if available
-
             file_length_sec = librosa.get_duration(filename=file_path)
 
-            self.diarize_audio(file_path, num_speakers=num_speakers)
-            speech_activity_detection_regions = self.load_diarize_results(file_path)
+            audio, _ = librosa.load(file_path, sr=self.args.datasource_samplerate)
+
+            # skip first 12sec intro for JRE podcast
+            audio = audio[int(self.args.datasource_samplerate * self.jre_podcast_intro_offset):]
+
+            predicted_segments = self.speaker_diarizer.diarize(
+                audio=audio,
+                batch_size=self.batch_size,
+                override_config=DiarizeConfig(
+                    batch_size=2,
+                    max_num_of_spks=3,
+                    sample_rate=self.args.datasource_samplerate
+                )
+            )
+            logger.debug(predicted_segments)
+
+            speech_activity_detection_regions = []
+            for segment in predicted_segments[0]:
+                seg_parts = segment.split(" ")
+                start_sec = float(seg_parts[0])
+                end_sec = float(seg_parts[1])
+                speaker_id = int(seg_parts[2].replace("speaker_", ""))
+                speech_activity_detection_regions.append(AiSADSegment(
+                    start_sec=start_sec,
+                    end_sec=end_sec,
+                    speaker_id=speaker_id
+                ))
 
             speech_activity_detection_regions = self.process_remove_short_segments(speech_activity_detection_regions)
 
             # Extract embeddings for conversation part
             speaker_segments = {}
-            y, sr = librosa.load(file_path, sr=target_sample_rate)
+            y, sr = librosa.load(file_path, sr=self.args.datasource_samplerate)
             for idx_reg, sad_region in enumerate(speech_activity_detection_regions):
                 if sad_region.speaker_id not in speaker_segments:
                     speaker_segments[sad_region.speaker_id] = []
 
-                wav_segment = y[int(sad_region.start_sec * target_sample_rate):int(sad_region.end_sec * target_sample_rate)]
+                wav_segment = y[int(sad_region.start_sec * self.args.datasource_samplerate):int(sad_region.end_sec * self.args.datasource_samplerate)]
                 speaker_segments[sad_region.speaker_id].append(wav_segment)
 
             np_conversation_embeddings = {}
@@ -385,7 +232,7 @@ class DiarizationService:
             np_conversation_embeddings_processed_np = np.array(list(np_conversation_embeddings_processed.values()))
             logger.debug(f'np_conversation_embeddings_processed_np: {np_conversation_embeddings_processed_np.shape}')
 
-            ### check if np_conversation_embeddings_processed_np is empty and if it is create empy speec hsegment i nresults and skip rest
+            ### check if np_conversation_embeddings_processed_np is empty and if it is create empty speech segment in results and skip rest
             if len(np_conversation_embeddings_processed_np) == 0:
                 logger.warning(f"No conversation embeddings found. Setting to empty noise segment.")
                 segment_noise = ResultsSegment()
@@ -409,8 +256,8 @@ class DiarizationService:
                     segment = ResultsSegment()
                     segment.type = SegmentType.speech
                     segment.user_id = user_id
-                    segment.start_time = round(sad_region.start_sec, 2)
-                    segment.end_time = round(sad_region.end_sec, 2)
+                    segment.start_time = round(sad_region.start_sec + self.jre_podcast_intro_offset, 2)
+                    segment.end_time = round(sad_region.end_sec + self.jre_podcast_intro_offset, 2)
                     segments_speech.append(segment)
 
                 segments_speech = sorted(segments_speech, key=lambda x: x.start_time)
@@ -496,8 +343,6 @@ class DiarizationService:
                 result.length_sec = file_length_sec
                 result.segments = segments_speech_all
 
-            self.clean_up_diarize_results(file_path)
-
         except Exception as exc:
             logger.exception(exc)
             if error_message is None:
@@ -522,7 +367,8 @@ if __name__ == '__main__':
     # logger.info(f'np_voice_embeddings shape: {np_voice_embeddings[0].shape}')
     # logger.info(f'quality: {quality}')
 
-    file_path_input = f"{ROOT_DIR}/tests/KT_file_1_test_mono.wav"
+    # file_path_input = f"{ROOT_DIR}/tests/KT_file_1_test_mono.wav"
+    file_path_input = f"{ROOT_DIR}/tests/JRE_Chase_Hughes_16k_mono.wav"
 
     # AudioUtils.get_wav_info(file_path_input)
     # AudioUtils.convert_stereo_to_mono(file_path=file_path_input, output_path=f"{ROOT_DIR}/tests/KT_file_1_test_mono.wav")
@@ -549,7 +395,6 @@ if __name__ == '__main__':
 
     result, error_message = controller_diarization._run_inference(
         file_path=file_path_input,
-        file_path_denoised=file_path_input,
         # voiceid_conversation_input,
         # task_client_user_id=member.client_id,
         # is_process_autoresponder=False
@@ -557,6 +402,6 @@ if __name__ == '__main__':
 
     print(result.model_dump_json(indent=4))
 
-    with open(f"{ROOT_DIR}/tests/diarize_result.json", "w", encoding="utf-8") as f:
+    with open(f"{ROOT_DIR}/tests/{os.path.basename(file_path_input).replace(".wav", "")}_diarize_result.json", "w", encoding="utf-8") as f:
         f.write(result.model_dump_json(indent=4))
 

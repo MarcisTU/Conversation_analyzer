@@ -68,19 +68,6 @@ async def root():
 
 
 @app.post(
-    path="/api/v1/task_submit_url",
-    status_code=status.HTTP_202_ACCEPTED,
-    response_model=TaskSubmitResponse
-)
-async def create_audio_url_task(
-    youtube_url: str | None = Query(None, description="Youtube url for video audio you want to process."),
-    callback_url: str | None = Query(None, description="Callback url for receiving task completion results"),
-    file_client: Minio = Depends(minio_manager.get_client),
-    channel: aio_pika.RobustChannel = Depends(rmq_manager.get_channel)
-):
-    pass
-
-@app.post(
     path="/api/v1/task_submit",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=TaskSubmitResponse

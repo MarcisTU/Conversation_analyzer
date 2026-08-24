@@ -15,10 +15,11 @@ from funasr import AutoModel
 from src.modules.constants import ROOT_DIR, SRC_DIR
 from src.models.enums import SegmentType, EmotionLabel
 from src.models.results import Results, ResultEmotion
+from src.services.base_service import BaseService
 from src.utils.audio_utils import AudioUtils
 
 
-class AudioEmotionService:
+class AudioEmotionService(BaseService):
     def __init__(self, args, batch_size=2):
         try:
             super().__init__()
@@ -28,7 +29,7 @@ class AudioEmotionService:
             self.segment_padding = 1.0  # padding around audio chunk segments
 
             try:
-                model_id = "iic/emotion2vec_plus_large"
+                model_id = "iic/emotion2vec_plus_large"  # 0: angry 1: disgusted 2: fearful 3: happy 4: neutral 5: other 6: sad 7: surprised 8: unknown
                 self.emo_model = AutoModel(
                     model=model_id,
                     hub="hf"
@@ -94,7 +95,6 @@ class AudioEmotionService:
     async def inference(
         self,
         file_path: str,
-        file_path_denoised: str,
         existing_results: Results
     ) -> Tuple[Results, str]:
         """
@@ -107,21 +107,16 @@ class AudioEmotionService:
         return await asyncio.to_thread(
             self._run_inference,
             file_path=file_path,
-            file_path_denoised=file_path_denoised,
             existing_results=existing_results
         )
 
     def _run_inference(
         self,
         file_path: str,
-        file_path_denoised: Optional[str],
         existing_results: Results
     ) -> Tuple[Results, str]:
         error_message = None
         try:
-            if file_path_denoised is not None and file_path_denoised != file_path:
-                file_path = file_path_denoised
-
             y, sr = librosa.load(file_path, sr=self.args.datasource_samplerate)
 
             all_segments_speech = []
@@ -189,7 +184,6 @@ if __name__ == '__main__':
 
     results, error_message = audio_emotion_service._run_inference(
         file_path=file_path_input,
-        file_path_denoised=file_path_input,
         existing_results=existing_results
     )
 
@@ -199,8 +193,9 @@ if __name__ == '__main__':
         if segment.type == "speech"
         for emotion in segment.emotions
     )
+    logger.info(emotion_counts)
 
-    print(results.model_dump_json(indent=4))
+    logger.info(results.model_dump_json(indent=4))
 
     with open(f"{ROOT_DIR}/tests/audio_emotions_result.json", "w", encoding="utf-8") as f:
         f.write(results.model_dump_json(indent=4))

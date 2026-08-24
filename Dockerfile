@@ -59,9 +59,12 @@ RUN pip install --no-cache-dir fastapi[standard] huggingface_hub[hf_xet] alembic
 
 ### AI Dependencies
 # install specific PyTorch wheels inside the conda environment
-RUN pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu130
+RUN pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu130
+RUN conda install "ffmpeg" -c conda-forge
+RUN pip install torchcodec==0.10 --index-url=https://download.pytorch.org/whl/cu130
 # Requirements install
-RUN pip install nvidia-resiliency-ext==0.3.0 nemo_toolkit['asr'] python-dotenv
+RUN pip install nvidia-resiliency-ext==0.3.0 python-dotenv
+RUN pip install "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@95f92737c"
 RUN pip install -U funasr
 RUN pip install sqlmodel asyncpg aio-pika loguru miniopy-async
 

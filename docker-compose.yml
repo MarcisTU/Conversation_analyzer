@@ -153,12 +153,60 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      file_storage:
+        condition: service_started
     networks:
       - ai_audio_network
     volumes:
       - .:/app
       - ./logs:/logs
     command: uv run python -m src.workers.image_worker
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  emotion_worker:
+    image: kt_audio_base:latest
+    container_name: emotion_worker
+    working_dir: /app
+    env_file: "./.env"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      file_storage:
+        condition: service_started
+    networks:
+      - ai_audio_network
+    volumes:
+      - .:/app
+      - ./logs:/logs
+    command: uv run python -m src.workers.audio_emotions_worker
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  stt_worker:
+    image: kt_audio_base:latest
+    container_name: stt_worker
+    working_dir: /app
+    env_file: "./.env"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      file_storage:
+        condition: service_started
+    networks:
+      - ai_audio_network
+    volumes:
+      - .:/app
+      - ./logs:/logs
+    command: uv run python -m src.workers.audio_stt_worker
     stop_grace_period: 30s
     restart: unless-stopped
 

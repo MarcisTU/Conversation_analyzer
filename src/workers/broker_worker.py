@@ -218,6 +218,7 @@ class BrokerWorker:
 
                 await self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
 
+                # TODO add switch statement here
                 if worker_response_payload.status == WorkerStatusMessage.shutdown:
                     await self.unregister_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
                     return
@@ -252,7 +253,7 @@ class BrokerWorker:
                     result_data=worker_response_payload.result
                 )
 
-                # Kick off the next feature in the pipeline (or finalise the task)
+                # Kick off the next feature in the pipeline (or finalize the task)
                 await self.dispatch_next_feature(worker_response_payload.task_uuid)
                 await self.process_pending_requests()
 

@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.column("order_idx", sa.Integer),
     )
 
-    # Insert your data
+    # Insert feature data for this migration so the table is populated
     op.bulk_insert(
         feature_table,
         [
