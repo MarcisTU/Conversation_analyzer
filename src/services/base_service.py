@@ -13,4 +13,4 @@ class BaseService(ABC):
 
     @abstractmethod
     def _run_inference(self, file_path: str, existing_results: Results) -> Tuple[Results, str]:
-        """Async call inference logic method (synchronous) for main logic execution on GPU/CPU."""
+        """Inference logic method (synchronous) for main logic execution on GPU/CPU."""

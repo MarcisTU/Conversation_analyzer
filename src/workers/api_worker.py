@@ -7,7 +7,7 @@ from uuid import UUID
 import aio_pika
 from aio_pika import DeliveryMode, Message
 from fastapi import FastAPI, HTTPException, Depends, status, Query, UploadFile
-from fastapi.security import APIKeyHeader
+
 from loguru import logger
 from miniopy_async import Minio
 
@@ -20,10 +20,19 @@ from src.models.schemas import TaskRead
 from src.modules.exception_handlers import register_exception_handlers
 from src.modules.file_storage_client import MinioManager
 from src.modules.mq_connection_manager import RabbitMQManager
+from src.modules.security import verify_api_key
+from src.modules.constants import FS_ENDPOINT, FS_ACCESS_KEY, FS_SECRET_KEY, FS_USE_SECURE, MQ_URL
 
 
-rmq_manager = RabbitMQManager(os.environ["RABBITMQ_URL"])
-minio_manager = MinioManager("localhost:9000", "admin", "admin123", secure=False)
+rmq_manager = RabbitMQManager(
+    url=MQ_URL
+)
+minio_manager = MinioManager(
+    endpoint=FS_ENDPOINT, 
+    access_key=FS_ACCESS_KEY,
+    secret_key=FS_SECRET_KEY, 
+    secure=FS_USE_SECURE
+)
 
 
 @asynccontextmanager
@@ -33,28 +42,6 @@ async def lifespan(app: FastAPI):
     yield
     await rmq_manager.close()
     await minio_manager.close_client()
-
-
-api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=True)
-
-
-async def verify_api_key(api_key: str = Depends(api_key_header)):
-    expected_api_key = os.getenv("API_KEY")
-
-    if not expected_api_key:
-        logger.error("API_KEY environment variable is not configured.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API authentication is misconfigured on the server."
-        )
-
-    if api_key != expected_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid or missing API Key."
-        )
-
-    return api_key
 
 
 # Protect all routes. If need some to be public can create separately Dependency for each
@@ -94,7 +81,8 @@ async def create_audio_task(
     await TaskService.insert_task_with_features(
         callback_url=callback_url,
         task_uuid=task_uuid,
-        features_to_process=[FeatureName.diarization, FeatureName.emotion]
+        # features_to_process=[FeatureName.diarization, FeatureName.emotion, FeatureName.stt]
+        features_to_process=[FeatureName.diarization]
     )
 
     task_payload = TaskPayload(

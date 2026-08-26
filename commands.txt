@@ -7,7 +7,7 @@ cd /mnt/c/Users/User/PycharmProjects/KT_analyzer
 
 
 ### Docker commands
-# Stop cotnainers and remove volumes
+# Stop containers and remove volumes
 docker compose down -v
 
 # Build service container fresh and start it
@@ -20,12 +20,7 @@ docker compose --profile tools run --rm alembic_gen alembic revision --autogener
 
 # Run utils scripts with docker command
 docker compose run --rm api python -m src.utils.visualize_embeddings
-
-# Data ingestion script running inside docker compose env
-docker compose run --rm api python -m src.services.data_ingest_service
-
-# LLM Service testing in docker
-docker compose run --rm api python -m src.services.llm_service
+docker compose run --rm api python -m src.services.stt_service_nemo
 
 # rebuild service with no cache
 docker compose build --no-cache api
@@ -33,17 +28,17 @@ docker compose build --no-cache api
 # recreate docker service
 docker compose up -d --force-recreate broker_worker
 
+# Inspect live docker logs
+docker compose logs -f api
 
 # For local windows development! With low storage after creating multiple images
 docker image prune
 
 
-### PSQL commands
-# Get llm generated text values that contain some token
-```
-SELECT generated_description FROM product_embeddings WHERE generated_description ILIKE '%guitar%' LIMIT 10;
-```
-
+###
+# Connect to db with psql console
+psql -h localhost -p 5434 -U marcis -d kt_audio_db
+###
 
 ###
 ### PG volume data backup to host and then restore with docker

@@ -11,7 +11,7 @@ from loguru import logger
 from src.models.enums import WorkerStatusMessage, FeatureName
 from src.models.requests import WorkerResponsePayload
 from src.modules.mq_connection_manager import RabbitMQManager
-from src.services.diarization_service import DiarizationService
+from src.services.audio_diarization_service import DiarizationService
 
 
 WORKER_ID = f"worker-{uuid.uuid4().hex[:8]}"
