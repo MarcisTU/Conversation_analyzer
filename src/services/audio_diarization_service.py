@@ -402,6 +402,11 @@ if __name__ == '__main__':
 
     print(result.model_dump_json(indent=4))
 
-    with open(f"{ROOT_DIR}/tests/{os.path.basename(file_path_input).replace(".wav", "")}_diarize_result.json", "w", encoding="utf-8") as f:
+    file_name = os.path.splitext(os.path.basename(file_path_input))[0]
+
+    with open(
+        f"{ROOT_DIR}/tests/{file_name}_diarize_result.json",
+        "w", encoding="utf-8"
+    ) as f:
         f.write(result.model_dump_json(indent=4))
 

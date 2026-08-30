@@ -61,5 +61,6 @@ class EmotionLabel(str, Enum):
 
 
 class FileBucketNames(str, Enum):
-    request_files_unprocessed = 'request_files_unprocessed'
-    request_files_processed = 'request_files_processed'
+    # For S3-compatible clients, bucket names should be DNS-compatible, and underscores can cause the invalid hostname
+    request_files_unprocessed = 'request-files-unprocessed'
+    request_files_processed = 'request-files-processed'

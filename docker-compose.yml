@@ -51,7 +51,9 @@ services:
       - ./data:/data
     command: server /data --console-address ":9001"
     networks:
-      - ai_audio_network
+      ai_audio_network:
+        aliases:
+          - minio
 
   api:
     image: kt_audio_base:latest
@@ -114,7 +116,7 @@ services:
     volumes:
       - .:/app
       - ./logs:/logs
-    command: uv run python -m src.workers.broker_worker
+    command: python -m src.workers.broker_worker
     stop_grace_period: 30s
     restart: unless-stopped
 
@@ -137,17 +139,24 @@ services:
     volumes:
       - .:/app
       - ./logs:/logs
-    command: uv run python -m src.workers.callback_worker
+    command: python -m src.workers.callback_worker
     stop_grace_period: 30s
     restart: unless-stopped
 
   diarization_worker:
     image: kt_audio_base:latest
     container_name: diarization_worker
+    runtime: nvidia
     working_dir: /app
     env_file: "./.env"
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
+      # override model weights dir inside container (locally stored weights path)
+      HF_HOME: /app/models/weights/huggingface
+      TRANSFORMERS_CACHE: /app/models/weights/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,7 +169,7 @@ services:
     volumes:
       - .:/app
       - ./logs:/logs
-    command: uv run python -m src.workers.image_worker
+    command: python -m src.workers.audio_diarization_worker
     stop_grace_period: 30s
     restart: unless-stopped
 

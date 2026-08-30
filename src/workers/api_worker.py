@@ -66,14 +66,13 @@ async def create_audio_task(
     channel: aio_pika.RobustChannel = Depends(rmq_manager.get_channel)
 ):
     task_uuid = str(uuid.uuid4())
-    object_name = f"{task_uuid}_{file.filename}"
 
     if not await file_client.bucket_exists(FileBucketNames.request_files_unprocessed):
         await file_client.make_bucket(FileBucketNames.request_files_unprocessed)
 
     await file_client.put_object(
         bucket_name=FileBucketNames.request_files_unprocessed,
-        object_name=object_name,
+        object_name=task_uuid,
         data=file.file,
         length=file.size
     )
@@ -87,7 +86,7 @@ async def create_audio_task(
 
     task_payload = TaskPayload(
         task_uuid=task_uuid,
-        file_name=object_name,
+        file_name=task_uuid,
         bucket_name=FileBucketNames.request_files_unprocessed,
         callback_url=callback_url
     )
@@ -145,3 +144,24 @@ async def task_status(
         result=Results()
     )
 
+
+@app.post(
+    path="/api/v1/delete_task_audio_file",
+    status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_task_audio_file(
+    task_uuid: Annotated[
+        UUID,
+        Query(description="Valid uuid value that is returned when you submit a task to /api/v1/task_submit")
+    ] = None,
+    file_client: Minio = Depends(minio_manager.get_client)
+):
+    try:
+        await file_client.remove_object(FileBucketNames.request_files_unprocessed, str(task_uuid))
+
+    except Exception as e:
+        logger.error(e)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failed to delete task audio file task_uuid={task_uuid}. File doesn't exist in the storage."
+        )

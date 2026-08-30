@@ -21,8 +21,8 @@ class TaskService:
         async with get_db_session() as db:
             # Fetch the features matching the requested names to get their IDs
             feature_query = select(Feature).where(Feature.name.in_(features_to_process))
-            result = await db.exec(feature_query)
-            features = result.all()
+            result = await db.execute(feature_query)
+            features = result.scalars().all()
 
             if not features:
                 raise ValueError("None of the provided features were found in the database.")
@@ -71,8 +71,8 @@ class TaskService:
                 .where(Feature.name == feature_name)
             )
 
-            result = await db.exec(stmt)
-            feature_in_task = result.first()
+            result = await db.execute(stmt)
+            feature_in_task = result.scalars().first()
 
             if not feature_in_task:
                 return False
@@ -140,8 +140,9 @@ class TaskService:
                 .order_by(Feature.order_idx)
             )
 
-            result = await db.exec(stmt)
+            result = await db.execute(stmt)
             rows = result.all()  # Returns a list of tuples: [(FeaturesInTask, Feature), ...]
+
             return [
                 FeatureInTaskRead(
                     id=f_task.id,

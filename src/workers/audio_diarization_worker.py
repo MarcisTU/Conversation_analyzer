@@ -60,7 +60,13 @@ class AudioDiarizationWorker:
     async def heartbeat_loop(self):
         try:
             while True:
-                await self.send_status(WorkerResponsePayload(status=WorkerStatusMessage.heartbeat))
+                await self.send_status(
+                    WorkerResponsePayload(
+                        status=WorkerStatusMessage.heartbeat,
+                        worker_type=FeatureName.diarization,
+                        worker_id=WORKER_ID
+                    )
+                )
                 await asyncio.sleep(30)
         except asyncio.CancelledError:
             logger.info("Heartbeat loop stopped.")
@@ -111,6 +117,18 @@ class AudioDiarizationWorker:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="LLM Worker args")
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        type=str,
+        help="Which device to use. Available options: cpu or cuda."
+    )
+    parser.add_argument(
+        "--datasource_samplerate",
+        default=16000,
+        type=int,
+        help="Sample rate for service processing (Should be constant across AI workers)."
+    )
 
     return parser.parse_args()
 
