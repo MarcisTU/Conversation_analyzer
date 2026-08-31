@@ -36,7 +36,6 @@ class DiarizationService(BaseService):
             self.batch_size = batch_size
 
             self.micro_pause_segment_merge_threshold = 1.0
-            self.jre_podcast_intro_offset = 12.0   # for analyzing Joe Rogan Experience podcasts
 
             self.speaker_diarizer = SortformerEncLabelModel.from_pretrained("nvidia/diar_streaming_sortformer_4spk-v2.1")
             self.speaker_diarizer.eval()
@@ -157,18 +156,22 @@ class DiarizationService(BaseService):
 
     def _run_inference(
         self,
-        file_path: str,  # TODO in worker save the files from MinIO buckets to temp request file dir
+        file_path: str,
         num_speakers = None
     ) -> Tuple[Results, str]:
         result = None
         error_message = None
         try:
-            file_length_sec = librosa.get_duration(filename=file_path)
-
+            file_length_sec = librosa.get_duration(path=file_path)
             audio, _ = librosa.load(file_path, sr=self.args.datasource_samplerate)
 
-            # skip first 12sec intro for JRE podcast
-            audio = audio[int(self.args.datasource_samplerate * self.jre_podcast_intro_offset):]
+            logger.info(
+                f"audio shape={audio.shape}, "
+                f"dtype={audio.dtype}, "
+                f"sample_rate={self.args.datasource_samplerate}, "
+                f"min={audio.min()}, "
+                f"max={audio.max()}"
+            )
 
             predicted_segments = self.speaker_diarizer.diarize(
                 audio=audio,
@@ -256,8 +259,8 @@ class DiarizationService(BaseService):
                     segment = ResultsSegment()
                     segment.type = SegmentType.speech
                     segment.user_id = user_id
-                    segment.start_time = round(sad_region.start_sec + self.jre_podcast_intro_offset, 2)
-                    segment.end_time = round(sad_region.end_sec + self.jre_podcast_intro_offset, 2)
+                    segment.start_time = round(sad_region.start_sec, 2)
+                    segment.end_time = round(sad_region.end_sec, 2)
                     segments_speech.append(segment)
 
                 segments_speech = sorted(segments_speech, key=lambda x: x.start_time)
@@ -367,8 +370,8 @@ if __name__ == '__main__':
     # logger.info(f'np_voice_embeddings shape: {np_voice_embeddings[0].shape}')
     # logger.info(f'quality: {quality}')
 
-    # file_path_input = f"{ROOT_DIR}/tests/KT_file_1_test_mono.wav"
-    file_path_input = f"{ROOT_DIR}/tests/JRE_Chase_Hughes_16k_mono.wav"
+    file_path_input = f"{ROOT_DIR}/tests/KT_file_1_test_mono.wav"
+    # file_path_input = f"{ROOT_DIR}/tests/JRE_Chase_Hughes_16k_mono.wav"
 
     # AudioUtils.get_wav_info(file_path_input)
     # AudioUtils.convert_stereo_to_mono(file_path=file_path_input, output_path=f"{ROOT_DIR}/tests/KT_file_1_test_mono.wav")

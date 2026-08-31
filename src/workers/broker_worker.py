@@ -34,7 +34,7 @@ class BrokerWorker:
         self.callback_queue = None
 
         self.background_print_stats_interval = 5
-        self.worker_last_heartbeat_check_interval = 150
+        self.worker_last_heartbeat_check_interval = 100
 
     async def connect_message_queues(self):
         await self.mq_manager.channel.set_qos(prefetch_count=1)
@@ -53,13 +53,14 @@ class BrokerWorker:
         try:
             while True:
                 await asyncio.sleep(self.background_print_stats_interval)
+
                 available_worker_count = sum(len(w) for w in self.available_workers.values())
                 logger.info(f"Available workers: {available_worker_count}, Pending requests: {len(self.pending_requests)}")
                 if self.pending_requests:
                     oldest = self.pending_requests[0]
                     logger.info(f"Oldest pending request: {oldest['request_id']} | {oldest['queued_at']}")
 
-                self.check_available_workers()
+                await self.check_available_workers()
         except asyncio.CancelledError:
             logger.info("Print stats loop stopped.")
 

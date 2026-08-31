@@ -4,14 +4,18 @@ import json
 import os
 import signal
 import uuid
+import io
+import tempfile
 
 from aio_pika import IncomingMessage, ExchangeType, DeliveryMode, Message
 from loguru import logger
 
-from src.models.enums import WorkerStatusMessage, FeatureName
+from src.models.enums import WorkerStatusMessage, FeatureName, FileBucketNames
 from src.models.requests import WorkerResponsePayload
 from src.modules.mq_connection_manager import RabbitMQManager
 from src.services.audio_diarization_service import DiarizationService
+from src.modules.file_storage_client import MinioManager
+from src.modules.constants import FS_ENDPOINT, FS_ACCESS_KEY, FS_SECRET_KEY, FS_USE_SECURE
 
 
 WORKER_ID = f"worker-{uuid.uuid4().hex[:8]}"
@@ -20,8 +24,9 @@ logger.add(f"./logs/worker_{WORKER_ID}.log", rotation="00:00", retention="7 days
 
 
 class AudioDiarizationWorker:
-    def __init__(self, mq_manager, audio_diarization_service):
+    def __init__(self, mq_manager, audio_diarization_service, file_storage_client):
         self.mq_manager = mq_manager
+        self.file_storage_client = file_storage_client
 
         self.queue = None
         self.exchange = None
@@ -75,11 +80,35 @@ class AudioDiarizationWorker:
         async with message.process():
             try:
                 payload = json.loads(message.body.decode())
-                task_uuid = payload["task_uuid"]
+                task_uuid = payload["request_id"]
 
                 logger.info(f"Processing task {task_uuid}...")
 
-                result = await self.audio_diarization_service.inference(file_path="")   # TODO fetch file path from minio and pass temporary file handle
+                response = await self.file_storage_client.get_object(
+                    bucket_name=FileBucketNames.request_files_unprocessed,
+                    object_name=task_uuid,
+                )
+                logger.info(f"Successfully loaded task audio file from storage.")
+
+                with tempfile.NamedTemporaryFile(
+                    suffix=".wav",
+                    mode="wb",
+                    delete=True,
+                ) as tmp:
+                    while True:
+                        chunk = await response.content.read(1024 * 1024)  # 1 MB
+
+                        if not chunk:
+                            break
+
+                        tmp.write(chunk)
+
+                    tmp.flush()
+
+                    result = await self.audio_diarization_service.inference(
+                        file_path=tmp.name
+                    )
+
                 logger.info(f"Finished task {task_uuid}. \nResult: {result}")
 
                 worker_response_data = WorkerResponsePayload(
@@ -110,7 +139,13 @@ class AudioDiarizationWorker:
         except (asyncio.CancelledError, KeyboardInterrupt):
             logger.info("Worker shutting down...")
         finally:
-            await self.send_status(WorkerResponsePayload(status=WorkerStatusMessage.shutdown))
+            await self.send_status(
+                WorkerResponsePayload(
+                    status=WorkerStatusMessage.shutdown,
+                    worker_type=FeatureName.diarization,
+                    worker_id=WORKER_ID
+                )
+            )
 
             heartbeat_task.cancel()
 
@@ -139,11 +174,20 @@ async def main():
     mq_manager = RabbitMQManager(os.environ["RABBITMQ_URL"])
     await mq_manager.connect()
 
+    file_storage_client = MinioManager(
+        endpoint=FS_ENDPOINT, 
+        access_key=FS_ACCESS_KEY,
+        secret_key=FS_SECRET_KEY, 
+        secure=FS_USE_SECURE
+    )
+    file_storage_client.init_client()
+
     audio_diarization_service = DiarizationService(args)
 
     audio_diarization_worker = AudioDiarizationWorker(
         mq_manager=mq_manager,
-        audio_diarization_service=audio_diarization_service
+        audio_diarization_service=audio_diarization_service,
+        file_storage_client=file_storage_client.client
     )
     await audio_diarization_worker.connect_message_queues()
 
@@ -168,6 +212,7 @@ async def main():
     finally:
         logger.info("Cleaning up resources...")
         await mq_manager.close()
+        await file_storage_client.close_client()
 
 
 if __name__ == "__main__":

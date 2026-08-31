@@ -19,8 +19,7 @@ docker compose run --rm alembic_gen alembic init migrations
 docker compose --profile tools run --rm alembic_gen alembic revision --autogenerate -m "initial migration features"
 
 # Run utils scripts with docker command
-docker compose run --rm api python -m src.utils.visualize_embeddings
-docker compose run --rm api python -m src.services.stt_service_nemo
+docker compose run --rm diarization_worker python -m src.services.audio_diarization_service     
 
 # rebuild service with no cache
 docker compose build --no-cache api

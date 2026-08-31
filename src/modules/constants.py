@@ -8,10 +8,16 @@ ROOT_DIR = SRC_DIR.parent
 
 
 # File storage client constants from environment
-FS_ENDPOINT=f"{os.environ['FS_HOST']}:{os.environ['FS_PORT']}"
-FS_ACCESS_KEY=os.environ["FS_ACCESS_KEY"]
-FS_SECRET_KEY=os.environ["FS_SECRET_KEY"]
-FS_USE_SECURE=os.environ["FS_USE_SECURE"].lower() == "true"
+FS_HOST = os.getenv("FS_HOST", "localhost")
+FS_PORT = os.getenv("FS_PORT", "9000")
+
+FS_ENDPOINT = f"{FS_HOST}:{FS_PORT}"
+FS_ACCESS_KEY = os.getenv("FS_ACCESS_KEY", "minioadmin")
+FS_SECRET_KEY = os.getenv("FS_SECRET_KEY", "minioadmin")
+FS_USE_SECURE = os.getenv("FS_USE_SECURE", "false").lower() == "true"
 
 # Message queue constants
-MQ_URL=os.environ["RABBITMQ_URL"]
+MQ_URL = os.getenv(
+    "RABBITMQ_URL",
+    "amqp://guest:guest@localhost:5672/",
+)
