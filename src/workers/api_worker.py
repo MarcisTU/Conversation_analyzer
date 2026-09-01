@@ -67,11 +67,11 @@ async def create_audio_task(
 ):
     task_uuid = str(uuid.uuid4())
 
-    if not await file_client.bucket_exists(FileBucketNames.request_files_unprocessed):
-        await file_client.make_bucket(FileBucketNames.request_files_unprocessed)
+    if not await file_client.bucket_exists(FileBucketNames.request_files_unprocessed.value):
+        await file_client.make_bucket(FileBucketNames.request_files_unprocessed.value)
 
     await file_client.put_object(
-        bucket_name=FileBucketNames.request_files_unprocessed,
+        bucket_name=FileBucketNames.request_files_unprocessed.value,
         object_name=task_uuid,
         data=file.file,
         length=file.size
@@ -87,7 +87,7 @@ async def create_audio_task(
     task_payload = TaskPayload(
         task_uuid=task_uuid,
         file_name=task_uuid,
-        bucket_name=FileBucketNames.request_files_unprocessed,
+        bucket_name=FileBucketNames.request_files_unprocessed.value,
         callback_url=callback_url
     )
 
@@ -157,7 +157,7 @@ async def delete_task_audio_file(
     file_client: Minio = Depends(minio_manager.get_client)
 ):
     try:
-        await file_client.remove_object(FileBucketNames.request_files_unprocessed, str(task_uuid))
+        await file_client.remove_object(FileBucketNames.request_files_unprocessed.value, str(task_uuid))
 
     except Exception as e:
         logger.error(e)

@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import signal
+import random
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import List
@@ -66,6 +67,7 @@ class BrokerWorker:
 
     async def register_worker(self, worker_type: FeatureName, worker_id: str):
         is_new = worker_id not in self.available_workers[worker_type.value]
+
         self.available_workers[worker_type.value][worker_id] = WorkerStatus(
             worker_id=worker_id,
             last_heartbeat=datetime.now(timezone.utc)
@@ -101,24 +103,34 @@ class BrokerWorker:
             "callback_url": callback_url,
             "queued_at": datetime.utcnow().isoformat(),
             "features_in_task_id": features_in_task_id,
-            "existing_results": existing_results.model_dump(mode="json") if existing_results else None,
+            "existing_results": (
+                existing_results.model_dump(mode="json") 
+                if existing_results 
+                else None
+            )
         }
 
-        routing_key = f"worker.{worker_type.value}"
-
+        is_dispatched = False
         if not self.available_workers[worker_type.value]:
-            logger.warning(f"No workers for {worker_type.value}. Queuing feature job for {request_id}.")
-            self.pending_requests.append(payload)
-            return
+            logger.warning(f"No workers for {worker_type.value}. Leaving feature {features_in_task_id} as WAITING.")
 
-        await self.exchange.publish(
-            aio_pika.Message(
-                body=json.dumps(payload).encode(),
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-            ),
-            routing_key=routing_key,
-        )
-        logger.info(f"Dispatched feature '{worker_type.value}' for task {request_id}")
+            self.pending_requests.append(payload)
+        else:
+            # currently select random. TODO balanced?
+            target_worker_id = random.choice(self.available_workers[worker_type.value])
+            routing_key = f"worker.{worker_type.value}.{target_worker_id}"
+
+            await self.exchange.publish(
+                aio_pika.Message(
+                    body=json.dumps(payload).encode(),
+                    delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                ),
+                routing_key=routing_key,
+            )
+            logger.info(f"Dispatched feature '{worker_type.value}' for task {request_id} and worker {routing_key}")
+            is_dispatched = True
+
+        return is_dispatched
 
     async def dispatch_next_feature(self, task_uuid: str):
         """
@@ -141,22 +153,29 @@ class BrokerWorker:
             for f in features
             if f.status == FeatureStatus.READY
         ]
-        if len(prior_results):
-            existing_results = prior_results[-1]
-        else:
-            existing_results = None
+        existing_results = (
+            prior_results[-1]
+            if prior_results
+            else None
+        )
 
         next_feature = next(
-            (f for f in features if f.status == FeatureStatus.WAITING),
+            (
+                f 
+                for f in features 
+                if f.status == FeatureStatus.WAITING
+            ),
             None
         )
         if next_feature is None:
-            # All features finished — check if any failed
             if any(f.status == FeatureStatus.FAILED for f in features):
                 logger.error(f"Task {task_uuid} completed with failures.")
+
                 await TaskService.update_task(
                     task_uuid=task_uuid,
-                    update_data=TaskUpdate(status=TaskStatus.FAILED)
+                    update_data=TaskUpdate(
+                        status=TaskStatus.FAILED
+                    )
                 )
             else:
                 logger.info(f"All features done for task {task_uuid}. Marking ready.")
@@ -169,22 +188,23 @@ class BrokerWorker:
                     )
                 )
                 await self._send_callback(task_uuid, existing_results, task.callback_url)
-            return
 
-        # Mark the feature as PROCESSING before dispatching to avoid double-dispatch
-        await TaskService.update_feature_status_by_type(
-            task_uuid=task_uuid,
-            feature_name=next_feature.name,
-            new_status=FeatureStatus.PROCESSING,
-        )
-
-        await self.dispatch_feature(
+        is_dispatched = await self.dispatch_feature(
             request_id=task_uuid,
             worker_type=next_feature.name,
             callback_url=task.callback_url,
             features_in_task_id=next_feature.id,
             existing_results=existing_results,
         )
+
+        # only mark as PROCESSING if worker was available and task is dispatched
+        if is_dispatched:
+            await TaskService.update_feature_status_by_type(
+                task_uuid=task_uuid,
+                feature_name=next_feature.name,
+                new_status=FeatureStatus.PROCESSING,
+            )
+
 
     async def handle_api_request(self, message: IncomingMessage):
         await self.check_available_workers()
@@ -199,10 +219,11 @@ class BrokerWorker:
 
                 logger.info(f"Received API request for task {payload.task_uuid}")
 
-                # Mark task as processing before touching features
                 await TaskService.update_task(
                     task_uuid=payload.task_uuid,
-                    update_data=TaskUpdate(status=TaskStatus.PROCESSING)
+                    update_data=TaskUpdate(
+                        status=TaskStatus.PROCESSING
+                    )
                 )
 
                 await self.dispatch_next_feature(payload.task_uuid)
@@ -219,46 +240,53 @@ class BrokerWorker:
                     logger.error(f"Invalid payload format received: {e}")
                     return
 
-                await self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
+                if worker_response_payload.status == WorkerStatusMessage.startup.value:
+                    await self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
 
-                # TODO add switch statement here
-                if worker_response_payload.status == WorkerStatusMessage.shutdown:
+                    await self.process_worker_pending_requests(
+                        worker_type=worker_response_payload.worker_type,
+                        worker_id=worker_response_payload.worker_id
+                    )
+                elif worker_response_payload.status == WorkerStatusMessage.shutdown.value:
                     await self.unregister_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
-                    return
-
-                if worker_response_payload.status == WorkerStatusMessage.heartbeat:
-                    return
-
-                if worker_response_payload.status == WorkerStatusMessage.failed_task:
+                elif worker_response_payload.status == WorkerStatusMessage.heartbeat.value:
+                    logger.info(f"Received heartbeat update for worker: {worker_response_payload.worker_id} | {{worker_response_payload.worker_type}}")
+                elif worker_response_payload.status == WorkerStatusMessage.failed.value:
                     updated = await TaskService.update_feature_status_by_type(
                         task_uuid=worker_response_payload.task_uuid,
                         feature_name=worker_response_payload.worker_type,
                         new_status=FeatureStatus.FAILED
                     )
-
                     if not updated:
                         logger.warning(f"Could not find feature entry for task {worker_response_payload.task_uuid} with type {worker_response_payload.worker_type}")
 
                     await TaskService.update_task(
                         task_uuid=worker_response_payload.task_uuid,
-                        update_data=TaskUpdate(status=TaskStatus.FAILED)
+                        update_data=TaskUpdate(
+                            status=TaskStatus.FAILED
+                        )
                     )
 
                     logger.error(f"Feature '{worker_response_payload.worker_type.value}' failed for task {worker_response_payload.task_uuid}. Task aborted.")
-                    return
+                else:
+                    logger.info(f"Feature '{worker_response_payload.worker_type.value}' completed for task {worker_response_payload.task_uuid}")
 
-                logger.info(f"Feature '{worker_response_payload.worker_type.value}' completed for task {worker_response_payload.task_uuid}")
+                    await TaskService.update_feature_status_by_type(
+                        task_uuid=worker_response_payload.task_uuid,
+                        feature_name=worker_response_payload.worker_type,
+                        new_status=FeatureStatus.READY,
+                        result_data=worker_response_payload.result
+                    )
 
-                await TaskService.update_feature_status_by_type(
-                    task_uuid=worker_response_payload.task_uuid,
-                    feature_name=worker_response_payload.worker_type,
-                    new_status=FeatureStatus.READY,
-                    result_data=worker_response_payload.result
-                )
+                    # assign any pending feature for this specific worker_type
+                    await self.process_worker_pending_requests(
+                        worker_type=worker_response_payload.worker_type, 
+                        worker_id=worker_response_payload.worker_id
+                    )
 
-                # Kick off the next feature in the pipeline (or finalize the task)
-                await self.dispatch_next_feature(worker_response_payload.task_uuid)
-                await self.process_pending_requests()
+                    # Kick off the next feature for task in the pipeline (or finalize the task)
+                    await self.dispatch_next_feature(worker_response_payload.task_uuid)
+                    
 
             except Exception as e:
                 logger.exception(e)
@@ -281,15 +309,22 @@ class BrokerWorker:
         )
         logger.info(f"Callback queued for task {task_uuid}")
 
-    async def process_pending_requests(self):
+    async def process_worker_pending_requests(
+            self, 
+            worker_type: FeatureName, 
+            worker_id: str
+    ) -> bool:
         if not self.pending_requests:
             return
 
         remaining = []
+        is_dispatched = False
         for request in self.pending_requests:
-            worker_type = request["worker_type"]
-            if self.available_workers[worker_type]:
-                routing_key = f"worker.{worker_type}"
+            req_worker_type = request["worker_type"]
+
+            if self.available_workers[req_worker_type] and req_worker_type == worker_type and not is_dispatched:
+                routing_key = f"worker.{req_worker_type}.{worker_id}"
+
                 await self.exchange.publish(
                     aio_pika.Message(
                         body=json.dumps(request).encode(),
@@ -297,31 +332,24 @@ class BrokerWorker:
                     ),
                     routing_key=routing_key,
                 )
-                logger.info(f"Dispatched pending feature job for task {request['request_id']}")
+
+                await TaskService.update_feature_status_by_type(
+                    task_uuid=request["request_id"],
+                    feature_name=request["worker_type"],
+                    new_status=FeatureStatus.PROCESSING,
+                )
+
+                logger.info(f"Dispatched pending feature job for task {request['request_id']} to worker with id: {worker_id}")
+                is_dispatched = True
             else:
                 remaining.append(request)
 
         self.pending_requests = remaining
 
-    async def requeue_pending_on_exit(self):
-        if not self.pending_requests:
-            return
-
-        logger.info(f"Requeuing {len(self.pending_requests)} pending requests...")
-        for request in self.pending_requests:
-            try:
-                await self.mq_manager.channel.default_exchange.publish(
-                    aio_pika.Message(
-                        body=json.dumps(request).encode(),
-                        delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-                    ),
-                    routing_key=os.environ["REQUEST_QUEUE"],
-                )
-            except Exception as e:
-                logger.error(f"Failed to requeue {request.get('request_id')}: {e}")
-        self.pending_requests.clear()
-
     async def run(self):
+        # Recover features that were still WAITING when the broker was previously stopped/crashed.
+        self.pending_requests = await TaskService.get_pending_feature_requests()
+
         print_status_task = asyncio.create_task(self._print_stats())
         request_consumer_tag = await self.request_queue.consume(self.handle_api_request)
         await self.response_queue.consume(self.handle_worker_response)
@@ -336,7 +364,7 @@ class BrokerWorker:
             if self.request_queue:
                 await self.request_queue.cancel(request_consumer_tag)
                 logger.info("Stopped consuming new requests.")
-            await self.requeue_pending_on_exit()
+
             print_status_task.cancel()
             logger.info("Broker worker shut down gracefully.")
 

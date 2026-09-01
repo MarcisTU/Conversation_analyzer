@@ -55,3 +55,22 @@ class Task(SQLModel, table=True):
 
     def __repr__(self):
         return f"<Task {self.id}>"
+
+
+class TaskResultsFinal(SQLModel, table=True):
+    __tablename__ = "task_results_final"
+
+    id: int | None = Field(default=None, primary_key=True)
+    task_id: int = Field(
+        foreign_key="tasks.id",
+        unique=True,  # allow only one task_id to have one result (one-to-one rel)
+        index=True,
+        ondelete="CASCADE",
+    )
+    result_data: Results = Field(
+        sa_column=Column(pg.JSONB, nullable=False)
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now,
+        sa_column=Column(pg.TIMESTAMP, nullable=False),
+    )

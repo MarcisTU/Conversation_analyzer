@@ -17,9 +17,9 @@ class TaskStatus(str, Enum):
 class WorkerStatusMessage(str, Enum):
     success = 'success'
     failed = 'failed'
+    startup = 'startup'
     shutdown = 'shutdown'
     heartbeat = 'heartbeat'
-    failed_task = 'failed_task'
 
 
 class WorkerType(str, Enum):

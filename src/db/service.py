@@ -2,9 +2,11 @@ from typing import List, Optional, Union
 
 from loguru import logger
 from sqlalchemy import select
+from datetime import datetime, timezone
+from collections import defaultdict
 
 from src.db.db import get_db_session
-from src.db.models import Task, Feature, FeaturesInTask
+from src.db.models import Task, Feature, FeaturesInTask, TaskResultsFinal
 from src.models.enums import TaskStatus, FeatureName, FeatureStatus
 from src.models.results import Results
 from src.models.schemas import ProductCreate, ReviewCreate, ProductRead, TaskUpdate, \
@@ -50,10 +52,6 @@ class TaskService:
             ]
             db.add_all(features_in_task_entries)
 
-            # Commit everything together
-            await db.commit()
-            await db.refresh(new_task)
-
     @staticmethod
     async def update_feature_status_by_type(
         task_uuid: str,
@@ -84,7 +82,7 @@ class TaskService:
                 feature_in_task.result_data = result_data.model_dump(mode="json")
 
             db.add(feature_in_task)
-            await db.commit()
+
             return True
 
     @staticmethod
@@ -115,10 +113,32 @@ class TaskService:
                 logger.error(f"Task with UUID {task_uuid} not found for database update operation.")
                 return None
 
-            update_dict = update_data.model_dump(exclude_unset=True)
+            update_dict = update_data.model_dump(exclude_unset=True, exclude={"results"})
             db_task.sqlmodel_update(update_dict)
 
-            db.add(db_task)
+            # Update/create final result
+            if update_data.results is not None:
+                final_result_query = await db.execute(
+                    select(TaskResultsFinal)
+                    .where(TaskResultsFinal.task_id == db_task.id)
+                )
+
+                final_result = final_result_query.scalar_one_or_none()
+
+                if final_result:
+                    # Final result already exists -> update it
+                    final_result.result_data = (
+                        update_data.results.model_dump(mode="json")
+                    )
+                    db.add(final_result)
+                else:
+                    # First final result -> create it
+                    final_result = TaskResultsFinal(
+                        task_id=db_task.id,
+                        result_data=update_data.results.model_dump(mode="json"),
+                    )
+                    db.add(final_result)
+
             await db.flush()
 
             logger.info(f"Database row updated for Task UUID: {task_uuid} | Status changed to: {db_task.status}")
@@ -155,3 +175,84 @@ class TaskService:
                 )
                 for f_task, feat in rows
             ]
+
+    @staticmethod
+    async def get_pending_feature_requests() -> list[dict]:
+        """
+        Recover pending feature requests from the database.
+
+        A feature is considered pending when its status is WAITING.
+
+        Only the first WAITING feature for each task is returned, based on
+        Feature.order_idx, because features within a task are processed
+        sequentially.
+        """
+        async with get_db_session() as db:
+            stmt = (
+                select(FeaturesInTask, Feature, Task)
+                .join(Task, FeaturesInTask.task_id == Task.id)
+                .join(Feature, FeaturesInTask.feature_id == Feature.id)
+                .where(
+                    FeaturesInTask.status.in_(
+                        [FeatureStatus.WAITING, FeatureStatus.READY]
+                    )
+                )
+                .order_by(
+                    Task.id,
+                    Feature.order_idx,
+                )
+            )
+
+            result = await db.execute(stmt)
+            rows = result.all()
+
+            # Group features by task.
+            task_features: dict[str, list[tuple]] = defaultdict(list)
+
+            for feature_in_task, feature, task in rows:
+                task_features[task.task_uuid].append(
+                    (feature_in_task, feature, task)
+                )
+
+            pending_requests = []
+
+            queued_at = datetime.now(timezone.utc).isoformat()
+
+            for task_uuid, features in task_features.items():
+                waiting_feature = None
+                existing_results = None
+
+                for feature_in_task, feature, task in features:
+                    if feature_in_task.status == FeatureStatus.READY:
+                        if feature_in_task.result_data is not None:
+                            existing_results = feature_in_task.result_data
+
+                    elif (
+                        feature_in_task.status == FeatureStatus.WAITING
+                        and waiting_feature is None
+                    ):
+                        waiting_feature = (
+                            feature_in_task,
+                            feature,
+                            task,
+                        )
+
+                if waiting_feature is None:
+                    continue
+
+                feature_in_task, feature, task = waiting_feature
+
+                pending_requests.append(
+                    {
+                        "request_id": task.task_uuid,
+                        "worker_type": feature.name.value,
+                        "callback_url": task.callback_url,
+                        "queued_at": queued_at,
+                        "features_in_task_id": feature_in_task.id,
+                        "existing_results": existing_results,
+                    }
+                )
+
+            logger.info(f"Recovered {len(pending_requests)} pending feature requests from database.")
+
+            return pending_requests

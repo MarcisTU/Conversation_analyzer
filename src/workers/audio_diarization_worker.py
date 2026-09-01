@@ -30,7 +30,7 @@ class AudioDiarizationWorker:
 
         self.queue = None
         self.exchange = None
-        self.routing_key = f"worker.{FeatureName.diarization}"
+        self.routing_key = f"worker.{FeatureName.diarization.value}.{WORKER_ID}"
 
         self.audio_diarization_service = audio_diarization_service
 
@@ -38,15 +38,22 @@ class AudioDiarizationWorker:
         await self.mq_manager.channel.set_qos(prefetch_count=1)
 
         self.exchange = await self.mq_manager.channel.declare_exchange(
-            os.environ["EXCHANGE_NAME"], ExchangeType.DIRECT, durable=True
+            os.environ["EXCHANGE_NAME"], 
+            ExchangeType.DIRECT, 
+            durable=True
         )
 
         # Declare a private queue for this worker and bind it to the exchange
         # We use a non-durable, auto-delete queue so it vanishes when the worker dies
         self.queue = await self.mq_manager.channel.declare_queue(
-            f"queue.{WORKER_ID}", auto_delete=True, exclusive=True
+            f"queue.{WORKER_ID}", 
+            auto_delete=True, 
+            exclusive=True
         )
-        await self.queue.bind(self.exchange, routing_key=self.routing_key)
+        await self.queue.bind(
+            self.exchange, 
+            routing_key=self.routing_key
+        )
 
         logger.info(f"Worker {WORKER_ID} connected and bound to {self.routing_key}")
 
@@ -65,14 +72,14 @@ class AudioDiarizationWorker:
     async def heartbeat_loop(self):
         try:
             while True:
+                await asyncio.sleep(30)
                 await self.send_status(
                     WorkerResponsePayload(
-                        status=WorkerStatusMessage.heartbeat,
-                        worker_type=FeatureName.diarization,
+                        status=WorkerStatusMessage.heartbeat.value,
+                        worker_type=FeatureName.diarization.value,
                         worker_id=WORKER_ID
                     )
                 )
-                await asyncio.sleep(30)
         except asyncio.CancelledError:
             logger.info("Heartbeat loop stopped.")
 
@@ -85,7 +92,7 @@ class AudioDiarizationWorker:
                 logger.info(f"Processing task {task_uuid}...")
 
                 response = await self.file_storage_client.get_object(
-                    bucket_name=FileBucketNames.request_files_unprocessed,
+                    bucket_name=FileBucketNames.request_files_unprocessed.value,
                     object_name=task_uuid,
                 )
                 logger.info(f"Successfully loaded task audio file from storage.")
@@ -97,7 +104,6 @@ class AudioDiarizationWorker:
                 ) as tmp:
                     while True:
                         chunk = await response.content.read(1024 * 1024)  # 1 MB
-
                         if not chunk:
                             break
 
@@ -105,30 +111,57 @@ class AudioDiarizationWorker:
 
                     tmp.flush()
 
-                    result = await self.audio_diarization_service.inference(
+                    result, error_message = await self.audio_diarization_service.inference(
                         file_path=tmp.name
                     )
 
                 logger.info(f"Finished task {task_uuid}. \nResult: {result}")
 
-                worker_response_data = WorkerResponsePayload(
-                    task_uuid=task_uuid,
-                    status=WorkerStatusMessage.success,
-                    worker_id=WORKER_ID,
-                    worker_type=FeatureName.diarization,
-                    result=result,
-                    callback_url=payload["callback_url"]
-                )
+                if error_message is None:
+                    worker_response_data = WorkerResponsePayload(
+                        task_uuid=task_uuid,
+                        status=WorkerStatusMessage.success.value,
+                        worker_id=WORKER_ID,
+                        worker_type=FeatureName.diarization.value,
+                        result=result,
+                        callback_url=payload["callback_url"]
+                    )
 
-                # Send result back (this also acts as a registration for the next task)
-                await self.send_status(worker_response_data)
-                logger.info(f"Task {task_uuid} completed and result sent.")
+                    # Send result back (this also acts as a registration for the next task)
+                    await self.send_status(worker_response_data)
+                    logger.info(f"Task {task_uuid} completed and result sent.")
+                else:
+                    logger.error(f"Task failed to process with error: {error_message}")
+
+                    worker_response_data = WorkerResponsePayload(
+                        task_uuid=task_uuid,
+                        status=WorkerStatusMessage.failed.value,
+                        worker_id=WORKER_ID,
+                        worker_type=FeatureName.diarization.value,
+                        callback_url=payload["callback_url"]
+                    )
+
+                    await self.send_status(worker_response_data)
 
             except Exception as e:
                 logger.exception(f"Error processing task: {e}")
-                await self.send_status(WorkerResponsePayload(status=WorkerStatusMessage.failed_task))
+                await self.send_status(
+                    WorkerResponsePayload(
+                        status=WorkerStatusMessage.failed_task.value,
+                        worker_type=FeatureName.diarization.value,
+                        worker_id=WORKER_ID
+                    )
+                )
 
     async def run(self):
+        await self.send_status(
+            WorkerResponsePayload(
+                status=WorkerStatusMessage.startup.value,
+                worker_type=FeatureName.diarization.value,
+                worker_id=WORKER_ID
+            )
+        )
+
         heartbeat_task = asyncio.create_task(self.heartbeat_loop())
 
         logger.info(f"Worker {WORKER_ID} waiting for tasks...")
@@ -141,12 +174,11 @@ class AudioDiarizationWorker:
         finally:
             await self.send_status(
                 WorkerResponsePayload(
-                    status=WorkerStatusMessage.shutdown,
-                    worker_type=FeatureName.diarization,
+                    status=WorkerStatusMessage.shutdown.value,
+                    worker_type=FeatureName.diarization.value,
                     worker_id=WORKER_ID
                 )
             )
-
             heartbeat_task.cancel()
 
 

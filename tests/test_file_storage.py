@@ -21,6 +21,10 @@ async def main():
         bucket_name = "request-files-unprocessed"
         task_file_name = "6f3c9619-23ee-4069-808f-024376291544"
 
+        # buckets = await client.list_buckets()
+        # for bucket in buckets:
+        #     print(bucket.name, bucket.creation_date)
+
         result = await client.bucket_exists(bucket_name)
         if result:
             print(f"{bucket_name} exists")
@@ -52,8 +56,8 @@ async def main():
         for obj in objects:
             print("obj:", obj._object_name)
 
-        await client.remove_object(bucket_name, "79530f9e-17fc-4c64-bafe-b280a48aa2a4")
-        # await client.remove_object(bucket_name, "e706cecc-1cff-47ce-8b01-462d0adf89c6_KT_file_1_test_mono.wav")
+        await client.remove_object(bucket_name, "eddcbe0b-42cd-4d80-9c01-f44fd3bcfd2c")
+        await client.remove_object(bucket_name, "7803b918-2968-4e7d-815a-986a51f887aa")
 
         
         # Get file data
