@@ -73,16 +73,16 @@ class BrokerWorker:
             last_heartbeat=datetime.now(timezone.utc)
         )
         if is_new:
-            logger.info(f"Worker registered: {worker_type.value}/{worker_id}")
+            logger.info(f"Worker registered: {worker_type.value}.{worker_id}")
         else:
-            logger.debug(f"Heartbeat updated for: {worker_type.value}/{worker_id}")
+            logger.debug(f"Heartbeat updated for: {worker_type.value}.{worker_id}")
 
     async def unregister_worker(self, worker_type: FeatureName, worker_id: str):
         removed = self.available_workers[worker_type.value].pop(worker_id, None)
         if removed:
-            logger.info(f"Worker removed: {worker_type.value}/{worker_id}")
+            logger.info(f"Worker removed: {worker_type.value}.{worker_id}")
         else:
-            logger.warning(f"Attempted to unregister non-existent worker: {worker_type.value}/{worker_id}")
+            logger.warning(f"Attempted to unregister non-existent worker: {worker_type.value}.{worker_id}")
 
     async def check_available_workers(self):
         for worker_type, workers_dict in self.available_workers.items():
@@ -92,7 +92,7 @@ class BrokerWorker:
                 > self.worker_last_heartbeat_check_interval
             ]
             for wid in dead:
-                logger.warning(f"Worker {worker_type}/{wid} timed out, removing.")
+                logger.warning(f"Worker {worker_type}.{wid} timed out, removing.")
                 workers_dict.pop(wid, None)
 
     async def dispatch_feature(self, request_id: str, worker_type: FeatureName, callback_url: str | None, features_in_task_id: int, existing_results: Results):
@@ -135,7 +135,7 @@ class BrokerWorker:
     async def dispatch_next_feature(self, task_uuid: str):
         """
         Load the task's feature list ordered by order_idx, find the first
-        WAITING feature, mark it IN_PROGRESS, and dispatch it.
+        WAITING feature and dispatch it.
         If all features are done, mark the task complete (and send callback).
         """
         task = await TaskService.get_task(task_uuid=task_uuid)
@@ -184,27 +184,26 @@ class BrokerWorker:
                     task_uuid=task_uuid,
                     update_data=TaskUpdate(
                         status=TaskStatus.READY,
-                        results=existing_results
+                        results=existing_results  # add latest results as final task result
                     )
                 )
                 await self._send_callback(task_uuid, existing_results, task.callback_url)
-
-        is_dispatched = await self.dispatch_feature(
-            request_id=task_uuid,
-            worker_type=next_feature.name,
-            callback_url=task.callback_url,
-            features_in_task_id=next_feature.id,
-            existing_results=existing_results,
-        )
-
-        # only mark as PROCESSING if worker was available and task is dispatched
-        if is_dispatched:
-            await TaskService.update_feature_status_by_type(
-                task_uuid=task_uuid,
-                feature_name=next_feature.name,
-                new_status=FeatureStatus.PROCESSING,
+        else:
+            is_dispatched = await self.dispatch_feature(
+                request_id=task_uuid,
+                worker_type=next_feature.name,
+                callback_url=task.callback_url,
+                features_in_task_id=next_feature.id,
+                existing_results=existing_results,
             )
 
+            # only mark as PROCESSING if worker was available and task is dispatched
+            if is_dispatched:
+                await TaskService.update_feature_status_by_type(
+                    task_uuid=task_uuid,
+                    feature_name=next_feature.name,
+                    new_status=FeatureStatus.PROCESSING,
+                )
 
     async def handle_api_request(self, message: IncomingMessage):
         await self.check_available_workers()
@@ -250,7 +249,7 @@ class BrokerWorker:
                 elif worker_response_payload.status == WorkerStatusMessage.shutdown.value:
                     await self.unregister_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
                 elif worker_response_payload.status == WorkerStatusMessage.heartbeat.value:
-                    logger.info(f"Received heartbeat update for worker: {worker_response_payload.worker_id} | {{worker_response_payload.worker_type}}")
+                    await self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
                 elif worker_response_payload.status == WorkerStatusMessage.failed.value:
                     updated = await TaskService.update_feature_status_by_type(
                         task_uuid=worker_response_payload.task_uuid,
@@ -349,6 +348,10 @@ class BrokerWorker:
     async def run(self):
         # Recover features that were still WAITING when the broker was previously stopped/crashed.
         self.pending_requests = await TaskService.get_pending_feature_requests()
+
+        pending_len = len(self.pending_requests)
+        if pending_len > 0:
+            logger.info(f"Loaded {pending_len} pending task features to process.")
 
         print_status_task = asyncio.create_task(self._print_stats())
         request_consumer_tag = await self.request_queue.consume(self.handle_api_request)

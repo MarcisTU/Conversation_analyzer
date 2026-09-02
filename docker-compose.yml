@@ -146,6 +146,7 @@ services:
   diarization_worker:
     image: kt_audio_base:latest
     container_name: diarization_worker
+    profiles: ["ai-workers"]
     runtime: nvidia
     working_dir: /app
     env_file: "./.env"
@@ -176,10 +177,14 @@ services:
   emotion_worker:
     image: kt_audio_base:latest
     container_name: emotion_worker
+    profiles: ["ai-workers"]
     working_dir: /app
     env_file: "./.env"
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
     depends_on:
       postgres:
         condition: service_healthy
@@ -199,10 +204,14 @@ services:
   stt_worker:
     image: kt_audio_base:latest
     container_name: stt_worker
+    profiles: ["ai-workers"]
     working_dir: /app
     env_file: "./.env"
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
     depends_on:
       postgres:
         condition: service_healthy

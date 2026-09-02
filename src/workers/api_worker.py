@@ -61,7 +61,13 @@ async def root():
 )
 async def create_audio_task(
     file: UploadFile,
-    callback_url: str | None = Query(None, description="Callback url for receiving task completion results"),
+    callback_url: str | None = Query(
+        None, description="Callback url for receiving task completion results"
+    ),
+    features_to_process: list[FeatureName] = Query(
+        default=[FeatureName.diarization],
+        description="Features to process.",
+    ),
     file_client: Minio = Depends(minio_manager.get_client),
     channel: aio_pika.RobustChannel = Depends(rmq_manager.get_channel)
 ):
@@ -80,8 +86,7 @@ async def create_audio_task(
     await TaskService.insert_task_with_features(
         callback_url=callback_url,
         task_uuid=task_uuid,
-        # features_to_process=[FeatureName.diarization, FeatureName.emotion, FeatureName.stt]
-        features_to_process=[FeatureName.diarization]
+        features_to_process=features_to_process
     )
 
     task_payload = TaskPayload(

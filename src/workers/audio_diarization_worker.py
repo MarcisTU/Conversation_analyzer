@@ -72,7 +72,6 @@ class AudioDiarizationWorker:
     async def heartbeat_loop(self):
         try:
             while True:
-                await asyncio.sleep(30)
                 await self.send_status(
                     WorkerResponsePayload(
                         status=WorkerStatusMessage.heartbeat.value,
@@ -80,6 +79,7 @@ class AudioDiarizationWorker:
                         worker_id=WORKER_ID
                     )
                 )
+                await asyncio.sleep(30)
         except asyncio.CancelledError:
             logger.info("Heartbeat loop stopped.")
 
