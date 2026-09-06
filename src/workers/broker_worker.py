@@ -61,11 +61,11 @@ class BrokerWorker:
                     oldest = self.pending_requests[0]
                     logger.info(f"Oldest pending request: {oldest['request_id']} | {oldest['queued_at']}")
 
-                await self.check_available_workers()
+                self.check_available_workers()
         except asyncio.CancelledError:
             logger.info("Print stats loop stopped.")
 
-    async def register_worker(self, worker_type: FeatureName, worker_id: str):
+    def register_worker(self, worker_type: FeatureName, worker_id: str):
         is_new = worker_id not in self.available_workers[worker_type.value]
 
         self.available_workers[worker_type.value][worker_id] = WorkerStatus(
@@ -77,14 +77,14 @@ class BrokerWorker:
         else:
             logger.debug(f"Heartbeat updated for: {worker_type.value}.{worker_id}")
 
-    async def unregister_worker(self, worker_type: FeatureName, worker_id: str):
+    def unregister_worker(self, worker_type: FeatureName, worker_id: str):
         removed = self.available_workers[worker_type.value].pop(worker_id, None)
         if removed:
             logger.info(f"Worker removed: {worker_type.value}.{worker_id}")
         else:
             logger.warning(f"Attempted to unregister non-existent worker: {worker_type.value}.{worker_id}")
 
-    async def check_available_workers(self):
+    def check_available_workers(self):
         for worker_type, workers_dict in self.available_workers.items():
             dead = [
                 wid for wid, status in workers_dict.items()
@@ -206,7 +206,7 @@ class BrokerWorker:
                 )
 
     async def handle_api_request(self, message: IncomingMessage):
-        await self.check_available_workers()
+        self.check_available_workers()
 
         async with message.process():
             try:
@@ -240,16 +240,16 @@ class BrokerWorker:
                     return
 
                 if worker_response_payload.status == WorkerStatusMessage.startup.value:
-                    await self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
+                    self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
 
                     await self.process_worker_pending_requests(
                         worker_type=worker_response_payload.worker_type,
                         worker_id=worker_response_payload.worker_id
                     )
                 elif worker_response_payload.status == WorkerStatusMessage.shutdown.value:
-                    await self.unregister_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
+                    self.unregister_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
                 elif worker_response_payload.status == WorkerStatusMessage.heartbeat.value:
-                    await self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
+                    self.register_worker(worker_response_payload.worker_type, worker_response_payload.worker_id)
                 elif worker_response_payload.status == WorkerStatusMessage.failed.value:
                     updated = await TaskService.update_feature_status_by_type(
                         task_uuid=worker_response_payload.task_uuid,
