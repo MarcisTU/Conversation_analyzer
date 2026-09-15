@@ -37,6 +37,7 @@ class DiarizationService(BaseService):
 
             self.micro_pause_segment_merge_threshold = 1.0
 
+            # finetune https://github.com/NVIDIA-NeMo/Speech/blob/main/examples/speaker_tasks/diarization/neural_diarizer/streaming_sortformer_diar_train.py
             self.speaker_diarizer = SortformerEncLabelModel.from_pretrained("nvidia/diar_streaming_sortformer_4spk-v2.1")
             self.speaker_diarizer.eval()
             self.speaker_diarizer.sortformer_modules.chunk_len = 340
@@ -47,6 +48,7 @@ class DiarizationService(BaseService):
             logger.info(f"Using device: {self.args.device}")
 
             try:
+                # finetune https://github.com/NVIDIA-NeMo/Speech/blob/main/tutorials/speaker_tasks/Speaker_Identification_Verification.ipynb
                 self.speaker_model = nemo_asr.models.EncDecSpeakerLabelModel.from_pretrained("nvidia/speakerverification_en_titanet_large")
             except Exception as exc:
                 raise FileNotFoundError(f"Error loading speaker model: {exc}")

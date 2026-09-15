@@ -22,6 +22,9 @@ docker compose --profile tools run --rm alembic_gen alembic revision --autogener
 docker compose run --rm diarization_worker python -m src.services.audio_diarization_service     
 docker compose run --rm api python -m tests.test_task_db_results 
 
+### Run in production with different compose file
+docker compose -f docker-compose.gc.yml --profile tools run --rm alembic_gen alembic upgrade head
+
 # rebuild service with no cache
 docker compose build --no-cache api
 
@@ -39,9 +42,15 @@ docker image prune
 
 
 ###
-# Connect to db with psql console
+
+# Connect to db with psql console local*
 psql -h localhost -p 5434 -U marcis -d kt_audio_db
+
+# remote supabase db
+psql -h aws-0-eu-west-2.pooler.supabase.com -p 5432 -U "postgres.xhtcvwbcdqkmshfpsluw" -d postgres
+
 ###
+
 
 ###
 ### PG volume data backup to host and then restore with docker

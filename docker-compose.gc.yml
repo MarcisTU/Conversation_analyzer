@@ -1,0 +1,196 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    env_file: "./.env_gc"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "${RABBITMQ_PORT}:5672"               # AMQP - AI workers connect here
+      - "${RABBITMQ_MANAGEMENT_PORT}:15672"   # Management UI - optional
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai_audio_network
+    restart: unless-stopped
+
+  file_storage:
+    image: quay.io/minio/minio
+    container_name: file_storage
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123
+    ports:
+      - "${FS_PORT}:9000"             # S3/API - workers access files here
+      - "${FS_CONSOLE_PORT}:9001"     # MinIO Console
+    volumes:
+      - ./data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      ai_audio_network:
+        aliases:
+          - minio
+
+  api:
+    image: kt_audio_base:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    container_name: api
+    env_file: "./.env_gc"
+    working_dir: /app
+    ports:
+      - "${API_PORT}:8080"
+    volumes:
+      - .:/app
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      file_storage:
+        condition: service_started
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn src.workers.api_worker:app --host ${API_HOST} --workers ${API_WORKERS} --port ${API_PORT} --proxy-headers --forwarded-allow-ips '*'"
+    networks:
+      - ai_audio_network
+
+  alembic_gen:
+    image: kt_audio_base:latest # name the image so it doesn't rebuild every time
+    env_file: "./.env_gc"
+    working_dir: /app
+    volumes:
+      - .:/app
+    networks:
+      - ai_audio_network
+    profiles:
+      - tools
+
+  broker_worker:
+    image: kt_audio_base:latest
+    env_file: "./.env_gc"
+    container_name: broker_worker
+    working_dir: /app
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ai_audio_network
+    volumes:
+      - .:/app
+      - ./logs:/logs
+    command: python -m src.workers.broker_worker
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  callback_worker:
+    image: kt_audio_base:latest
+    env_file: "./.env_gc"
+    container_name: callback_worker
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Required for Linux host-to-container routing
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ai_audio_network
+    volumes:
+      - .:/app
+      - ./logs:/logs
+    command: python -m src.workers.callback_worker
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  diarization_worker:
+    image: kt_audio_base:latest
+    container_name: diarization_worker
+    profiles: ["ai-workers"]
+    runtime: nvidia
+    working_dir: /app
+    env_file: "./.env_gc"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
+      # override model weights dir inside container (locally stored weights path)
+      HF_HOME: /app/models/weights/huggingface
+      TRANSFORMERS_CACHE: /app/models/weights/huggingface
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      file_storage:
+        condition: service_started
+    networks:
+      - ai_audio_network
+    volumes:
+      - .:/app
+      - ./logs:/logs
+    command: python -m src.workers.audio_diarization_worker
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  emotion_worker:
+    image: kt_audio_base:latest
+    container_name: emotion_worker
+    profiles: ["ai-workers"]
+    working_dir: /app
+    env_file: "./.env_gc"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      file_storage:
+        condition: service_started
+    networks:
+      - ai_audio_network
+    volumes:
+      - .:/app
+      - ./logs:/logs
+    command: uv run python -m src.workers.audio_emotions_worker
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  stt_worker:
+    image: kt_audio_base:latest
+    container_name: stt_worker
+    profiles: ["ai-workers"]
+    working_dir: /app
+    env_file: "./.env_gc"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      file_storage:
+        condition: service_started
+    networks:
+      - ai_audio_network
+    volumes:
+      - .:/app
+      - ./logs:/logs
+    command: uv run python -m src.workers.audio_stt_worker
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+  api_venv:
+
+networks:
+  ai_audio_network:
+    driver: bridge

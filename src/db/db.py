@@ -5,13 +5,14 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from src.db.models import Task, FeaturesInTask, Feature
+from src.modules.constants import DATABASE_URL
 
 
 # Create async engine
 async_engine = create_async_engine(
-    os.environ['DATABASE_URL'],
+    DATABASE_URL,
     poolclass=AsyncAdaptedQueuePool,
-    pool_size=10,
+    pool_size=8,
     max_overflow=20,
     pool_timeout=30,
     pool_recycle=1800,

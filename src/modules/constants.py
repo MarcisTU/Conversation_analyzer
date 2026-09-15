@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from loguru import logger
+from sqlalchemy.engine import URL
 
 # the projects ./src dir
 SRC_DIR = Path(__file__).resolve().parent.parent
@@ -21,3 +23,13 @@ MQ_URL = os.getenv(
     "RABBITMQ_URL",
     "amqp://guest:guest@localhost:5672/",
 )
+
+# Database URL setup (use sqlalchemy URL to avoid special characters in passwords and allow more robust creation)
+DATABASE_URL = URL.create(
+    drivername="postgresql+asyncpg",
+    username=os.environ["DB_USER"],
+    password=os.environ["DB_PASSWORD"],
+    host=os.environ["DB_HOST"],
+    port=int(os.environ["DB_PORT"]),
+    database=os.environ["DB_NAME"],
+)  # <drivername>://<DB_USER>:<DB_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>

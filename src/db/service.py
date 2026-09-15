@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Union
 
 from loguru import logger
 from sqlalchemy import select
@@ -9,7 +9,7 @@ from src.db.db import get_db_session
 from src.db.models import Task, Feature, FeaturesInTask, TaskResultsFinal
 from src.models.enums import TaskStatus, FeatureName, FeatureStatus
 from src.models.results import Results
-from src.models.schemas import ProductCreate, ReviewCreate, ProductRead, TaskUpdate, \
+from src.models.schemas import TaskUpdate, \
     TaskRead, FeatureInTaskRead
 
 
