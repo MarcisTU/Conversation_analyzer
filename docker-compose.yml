@@ -24,6 +24,9 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "${RABBITMQ_PORT}:5672"               # AMQP - AI workers connect here
+      - "${RABBITMQ_MANAGEMENT_PORT}:15672"   # Management UI - optional
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -41,6 +44,9 @@ services:
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: admin123
+    ports:
+      - "${FS_PORT}:9000"             # S3/API - workers access files here
+      - "${FS_CONSOLE_PORT}:9001"     # MinIO Console
     volumes:
       - ./data:/data
     command: server /data --console-address ":9001"
