@@ -1,12 +1,12 @@
 from typing import Annotated
 import os
 import uuid
-from typing import Annotated
+from typing import Annotated, List
 from uuid import UUID
 
 import aio_pika
 from aio_pika import DeliveryMode, Message
-from fastapi import APIRouter, HTTPException, Depends, status, Query, UploadFile
+from fastapi import APIRouter, HTTPException, Depends, status, Query, UploadFile, File
 from loguru import logger
 from miniopy_async import Minio
 
@@ -30,16 +30,25 @@ router = APIRouter(
     response_model=TaskSubmitResponse
 )
 async def create_audio_task(
-    file: UploadFile,
-    callback_url: str | None = Query(
-        None, description="Callback url for receiving task completion results"
-    ),
-    features_to_process: list[FeatureName] = Query(
-        default=[FeatureName.diarization],
-        description="Features to process.",
-    ),
-    file_client: Minio = Depends(minio_manager.get_client),
-    channel: aio_pika.RobustChannel = Depends(rmq_manager.get_channel)
+    file: Annotated[
+        UploadFile, File(...)
+    ],
+    file_client: Annotated[
+        Minio,
+        Depends(minio_manager.get_client),
+    ],
+    channel: Annotated[
+        aio_pika.RobustChannel,
+        Depends(rmq_manager.get_channel),
+    ],
+    callback_url: Annotated[
+        str | None,
+        Query(description="Callback url for receiving task completion results"),
+    ] = None,
+    features_to_process: Annotated[
+        list[FeatureName],
+        Query(description="Features to process."),
+    ] = [FeatureName.diarization],
 ):
     task_uuid = str(uuid.uuid4())
 
@@ -131,11 +140,14 @@ async def task_status(
     status_code=status.HTTP_204_NO_CONTENT
 )
 async def delete_task_audio_file(
+    file_client: Annotated[
+        Minio,
+        Depends(minio_manager.get_client),
+    ],
     task_uuid: Annotated[
         UUID,
         Query(description="Valid uuid value that is returned when you submit a task to /api/v1/task_submit")
     ] = None,
-    file_client: Minio = Depends(minio_manager.get_client)
 ):
     try:
         await file_client.remove_object(FileBucketNames.request_files_unprocessed.value, str(task_uuid))
