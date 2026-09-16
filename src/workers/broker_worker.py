@@ -5,7 +5,7 @@ import signal
 import random
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Dict
 
 import aio_pika
 from aio_pika import ExchangeType, IncomingMessage
@@ -24,8 +24,8 @@ logger.add("./logs/broker_worker.log", rotation="00:00", retention="7 days")
 
 class BrokerWorker:
     def __init__(self, mq_manager):
-        self.available_workers: dict[str, dict[str, WorkerStatus]] = defaultdict(dict)
-        self.pending_requests: list[dict] = []
+        self.available_workers: Dict[str, Dict[str, WorkerStatus]] = defaultdict(dict)
+        self.pending_requests: List[Dict] = []
 
         self.mq_manager = mq_manager
         self.exchange = None
@@ -111,13 +111,16 @@ class BrokerWorker:
         }
 
         is_dispatched = False
-        if not self.available_workers[worker_type.value]:
+        if len(self.available_workers[worker_type.value]) == 0:
             logger.warning(f"No workers for {worker_type.value}. Leaving feature {features_in_task_id} as WAITING.")
 
             self.pending_requests.append(payload)
         else:
             # currently select random. TODO balanced?
-            target_worker_id = random.choice(self.available_workers[worker_type.value])
+            # create list of worker ids -> worker-5d40dd10 , to choose from
+            target_worker_id = random.choice(
+                list(self.available_workers[worker_type.value].keys())
+            )
             routing_key = f"worker.{worker_type.value}.{target_worker_id}"
 
             await self.exchange.publish(

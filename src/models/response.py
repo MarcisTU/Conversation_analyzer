@@ -13,4 +13,5 @@ class TaskSubmitResponse(BaseModel):
 class TaskStatusResponse(BaseModel):
     status: TaskStatus = Field(default=TaskStatus.WAITING)
     task_uuid: str
-    result: Results = Field(default_factory=Results)
+    status_message: str = ""
+    result: Results | None = None

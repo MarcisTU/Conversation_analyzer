@@ -1,4 +1,4 @@
-from typing import Union
+from typing import List, Dict
 
 from loguru import logger
 from sqlalchemy import select
@@ -10,7 +10,7 @@ from src.db.models import Task, Feature, FeaturesInTask, TaskResultsFinal
 from src.models.enums import TaskStatus, FeatureName, FeatureStatus
 from src.models.results import Results
 from src.models.schemas import TaskUpdate, \
-    TaskRead, FeatureInTaskRead
+    TaskRead, FeatureInTaskRead, TaskResultRead
 
 
 class TaskService:
@@ -86,7 +86,7 @@ class TaskService:
             return True
 
     @staticmethod
-    async def get_task(task_uuid: str) -> Union[TaskRead, None]:
+    async def get_task(task_uuid: str) -> TaskRead | None:
         async with get_db_session() as db:
             result = await db.execute(
                 select(Task).where(Task.task_uuid == task_uuid)
@@ -100,6 +100,20 @@ class TaskService:
                 task_data = TaskRead.model_validate(db_task)
 
             return task_data
+
+    @staticmethod
+    async def get_task_result(task_id: int) -> TaskResultRead | None:
+        async with get_db_session() as db:
+            result = await db.execute(
+                select(TaskResultsFinal).where(TaskResultsFinal.task_id == task_id)
+            )
+            db_task_result = result.scalar_one_or_none()
+
+            return (
+                TaskResultRead.model_validate(db_task_result)
+                if db_task_result
+                else None
+            )
 
     @staticmethod
     async def update_task(task_uuid: str, update_data: TaskUpdate):
@@ -177,7 +191,7 @@ class TaskService:
             ]
 
     @staticmethod
-    async def get_pending_feature_requests() -> list[dict]:
+    async def get_pending_feature_requests() -> List[Dict]:
         """
         Recover pending feature requests from the database.
 

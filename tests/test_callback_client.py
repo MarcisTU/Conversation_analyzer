@@ -8,7 +8,7 @@ from flask import Flask, request
 from src.models.enums import FeatureName
 
 
-API_URL = "http://localhost:8083/api/v1/task_submit"
+API_URL = "http://localhost:8083/api/v1/tasks/submit"
 CALLBACK_PORT = 8765
 AUDIO_FILE = Path(__file__).parent / "KT_file_1_test_mono.wav"
 

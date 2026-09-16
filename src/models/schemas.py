@@ -8,7 +8,6 @@ from src.models.results import Results
 
 
 class TaskRead(BaseModel):
-    # This configuration makes it easy to work with ORM data structures seamlessly
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -20,11 +19,19 @@ class TaskRead(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    # This configuration makes it easy to work with ORM data structures seamlessly
     model_config = ConfigDict(from_attributes=True)
 
     status: Optional[TaskStatus] = None
     results: Optional[Results] = None
+
+
+class TaskResultRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    task_id: int
+    result_data: Results = Field(default_factory=Results)
+    created_at: Optional[datetime] = None
 
 
 class WorkerStatus(BaseModel):
