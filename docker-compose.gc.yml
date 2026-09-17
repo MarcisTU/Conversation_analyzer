@@ -132,11 +132,6 @@ services:
       # override model weights dir inside container (locally stored weights path)
       HF_HOME: /app/models/weights/huggingface
       TRANSFORMERS_CACHE: /app/models/weights/huggingface
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      file_storage:
-        condition: service_started
     networks:
       - ai_audio_network
     volumes:
@@ -154,14 +149,14 @@ services:
     env_file: "./.env_gc"
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_EXTERNAL_URL}
+      FS_HOST: ${FS_EXTERNAL_HOST}
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      file_storage:
-        condition: service_started
+      # override model weights dir inside container (locally stored weights path)
+      HF_HOME: /app/models/weights/huggingface
+      TRANSFORMERS_CACHE: /app/models/weights/huggingface
     networks:
       - ai_audio_network
     volumes:
@@ -179,14 +174,14 @@ services:
     env_file: "./.env_gc"
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_EXTERNAL_URL}
+      FS_HOST: ${FS_EXTERNAL_HOST}
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      file_storage:
-        condition: service_started
+      # override model weights dir inside container (locally stored weights path)
+      HF_HOME: /app/models/weights/huggingface
+      TRANSFORMERS_CACHE: /app/models/weights/huggingface
     networks:
       - ai_audio_network
     volumes:
