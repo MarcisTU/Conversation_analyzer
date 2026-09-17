@@ -24,6 +24,8 @@ docker compose run --rm api python -m tests.test_task_db_results
 
 ### Run in production with different compose file
 docker compose -f docker-compose.gc.yml --profile tools run --rm alembic_gen alembic upgrade head
+# run build image with specific compose file and env file (production)
+docker compose --env-file .env_gc -f docker-compose.gc.yml build
 
 # rebuild service with no cache
 docker compose build --no-cache api

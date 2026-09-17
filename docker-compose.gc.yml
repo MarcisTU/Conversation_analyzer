@@ -44,6 +44,8 @@ services:
       dockerfile: Dockerfile
       network: host
     container_name: api
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_INTERNAL_URL}
     env_file: "./.env_gc"
     working_dir: /app
     ports:
@@ -76,6 +78,8 @@ services:
     image: kt_audio_base:latest
     env_file: "./.env_gc"
     container_name: broker_worker
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_INTERNAL_URL}
     working_dir: /app
     depends_on:
       rabbitmq:
@@ -93,6 +97,8 @@ services:
     image: kt_audio_base:latest
     env_file: "./.env_gc"
     container_name: callback_worker
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_INTERNAL_URL}
     working_dir: /app
     extra_hosts:
       - "host.docker.internal:host-gateway" # Required for Linux host-to-container routing

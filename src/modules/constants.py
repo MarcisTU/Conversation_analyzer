@@ -19,10 +19,7 @@ FS_SECRET_KEY = os.getenv("FS_SECRET_KEY", "minioadmin")
 FS_USE_SECURE = os.getenv("FS_USE_SECURE", "false").lower() == "true"
 
 # Message queue constants
-MQ_URL = os.getenv(
-    "RABBITMQ_URL",
-    "amqp://guest:guest@localhost:5672/",
-)
+MQ_URL = os.getenv("RABBITMQ_URL")
 
 # Database URL setup (use sqlalchemy URL to avoid special characters in passwords and allow more robust creation)
 DATABASE_URL = URL.create(
