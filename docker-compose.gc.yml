@@ -46,6 +46,7 @@ services:
     container_name: api
     environment:
       RABBITMQ_URL: ${RABBITMQ_INTERNAL_URL}
+      FS_HOST: ${FS_INTERNAL_HOST}
     env_file: "./.env_gc"
     working_dir: /app
     ports:
@@ -123,6 +124,8 @@ services:
     env_file: "./.env_gc"
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_EXTERNAL_URL}
+      FS_HOST: ${FS_EXTERNAL_HOST}
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}

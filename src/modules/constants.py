@@ -10,8 +10,8 @@ ROOT_DIR = SRC_DIR.parent
 
 
 # File storage client constants from environment
-FS_HOST = os.getenv("FS_HOST", "localhost")
-FS_PORT = os.getenv("FS_PORT", "9000")
+FS_HOST = os.getenv("FS_HOST")
+FS_PORT = os.getenv("FS_PORT")
 
 FS_ENDPOINT = f"{FS_HOST}:{FS_PORT}"
 FS_ACCESS_KEY = os.getenv("FS_ACCESS_KEY", "minioadmin")
