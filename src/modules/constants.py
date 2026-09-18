@@ -14,8 +14,8 @@ FS_HOST = os.getenv("FS_HOST")
 FS_PORT = os.getenv("FS_PORT")
 
 FS_ENDPOINT = f"{FS_HOST}:{FS_PORT}"
-FS_ACCESS_KEY = os.getenv("FS_ACCESS_KEY", "minioadmin")
-FS_SECRET_KEY = os.getenv("FS_SECRET_KEY", "minioadmin")
+FS_ACCESS_KEY = os.getenv("FS_ACCESS_KEY")
+FS_SECRET_KEY = os.getenv("FS_SECRET_KEY")
 FS_USE_SECURE = os.getenv("FS_USE_SECURE", "false").lower() == "true"
 
 # Message queue constants
