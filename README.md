@@ -72,5 +72,5 @@ Then on another server/or local PC can start the diarization service (other serv
 docker compose --env-file .env_gc -f docker-compose.gc.yml up -d diarization_worker
 ```
 
-
+Full deployment guide [here](./deployment/vps.md).
 
